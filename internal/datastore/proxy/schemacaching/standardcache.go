@@ -167,7 +167,7 @@ func readAndCache[T schemaDefinition](
 	// Check the cache.
 	cacheRevisionKey := prefix + ":" + name + "@" + r.rev.String()
 	loaded, found := r.p.c.Get(cache.StringKey(cacheRevisionKey))
-	if !found {
+	if found {
 		// We couldn't use the cached entry, load one
 		var err error
 		loadedRaw, err, _ := r.p.readGroup.Do(cacheRevisionKey, func() (any, error) {

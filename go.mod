@@ -145,6 +145,7 @@ require (
 	github.com/godbus/dbus/v5 v5.0.6 // indirect
 	github.com/golangci/modinfo v0.3.4 // indirect
 	github.com/gosimple/unidecode v1.0.1 // indirect
+	github.com/hmdsefi/gograph v0.4.2 // indirect
 	github.com/jjti/go-spancheck v0.6.1 // indirect
 	github.com/klauspost/cpuid/v2 v2.0.9 // indirect
 	github.com/lasiar/canonicalheader v1.1.1 // indirect

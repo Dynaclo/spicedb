@@ -116,6 +116,8 @@ func main() {
 		},
 	})
 
+	rootCmd.PreRun = func(cmd *cobra.Command, args []string) {}
+
 	if err := rootCmd.Execute(); err != nil {
 		if !errors.Is(err, errParsing) {
 			log.Err(err).Msg("terminated with errors")
