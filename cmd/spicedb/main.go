@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"github.com/authzed/spicedb/internal/indexer"
 	relationships "github.com/authzed/spicedb/internal/services/v1"
 	"github.com/authzed/spicedb/pkg/cmd/datastore"
 	"github.com/sercand/kuberesolver/v5"
@@ -96,8 +97,10 @@ func main() {
 			return err
 		}
 		for val := iterator.Next(); val != nil; val = iterator.Next() {
-			println(val.Subject.ObjectId)
+			indexer.AddEdge(val)
 		}
+		indexer.NewIndex()
+		indexer.Index.DumpGraph()
 		return nil
 	}
 

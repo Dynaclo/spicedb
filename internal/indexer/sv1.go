@@ -2,11 +2,13 @@ package indexer
 
 import (
 	"fmt"
+	corev1 "github.com/authzed/spicedb/pkg/proto/core/v1"
 	"github.com/hmdsefi/gograph"
 	"math/rand"
+	"os"
 )
 
-var index SV1
+var Index SV1
 
 // Fully Dynamic Transitive Closure Index
 type FullDynTCIndex interface {
@@ -24,6 +26,41 @@ type SV1 struct {
 	SV           *gograph.Vertex[string]
 	R_Plus       map[string]bool //store all vertices reachable from SV
 	R_Minus      map[string]bool //store all vertices that can reach SV
+}
+
+var graph gograph.Graph[string]
+
+func makeNodeNameFromObjectRelationPair(relation *corev1.ObjectAndRelation) string {
+	return relation.Namespace + "#" + relation.ObjectId
+}
+
+func createVertexIfNeeded(relation *corev1.ObjectAndRelation) *gograph.Vertex[string] {
+	if graph == nil {
+		graph = gograph.New[string](gograph.Directed())
+	}
+	name := makeNodeNameFromObjectRelationPair(relation)
+	vtx := graph.GetVertexByID(name)
+	if graph.GetVertexByID(name) == nil {
+		vtx = gograph.NewVertex[string](name)
+		graph.AddVertex(vtx)
+	}
+	return vtx
+
+}
+
+func AddEdge(tuple *corev1.RelationTuple) {
+	src := createVertexIfNeeded(tuple.ResourceAndRelation)
+	dest := createVertexIfNeeded(tuple.Subject)
+	_, err := graph.AddEdge(src, dest)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func NewIndex() {
+	sv := SV1{}
+	sv.NewIndex(graph)
+	Index = sv
 }
 
 // maybe have a Init() fn return pointer to Graph object to which
@@ -256,4 +293,35 @@ func (algo *SV1) CheckReachability(src string, dst string) (bool, error) {
 		return true, nil
 	}
 	return false, nil
+}
+
+func generateDotFile(graph gograph.Graph[string], filename string) error {
+	file, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	_, err = file.WriteString("digraph G {\n")
+	if err != nil {
+		return err
+	}
+
+	for _, edge := range graph.AllEdges() {
+		line := fmt.Sprintf("  \"%s\" -> \"%s\";\n", edge.Source().Label(), edge.Destination().Label())
+		_, err := file.WriteString(line)
+		if err != nil {
+			return err
+		}
+	}
+
+	_, err = file.WriteString("}\n")
+	return err
+}
+
+func (algo *SV1) DumpGraph() {
+	err := generateDotFile(algo.Graph, "graph.dot")
+	if err != nil {
+		panic(err)
+	}
 }
