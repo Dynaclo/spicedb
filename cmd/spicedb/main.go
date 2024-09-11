@@ -3,18 +3,21 @@ package main
 import (
 	"errors"
 	"fmt"
+	relationships "github.com/authzed/spicedb/internal/services/v1"
+	"github.com/authzed/spicedb/pkg/cmd/datastore"
+	"github.com/sercand/kuberesolver/v5"
 	"os"
 
 	mcobra "github.com/muesli/mango-cobra"
 	"github.com/muesli/roff"
 	"github.com/rs/zerolog"
-	"github.com/sercand/kuberesolver/v5"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc/balancer"
 
 	_ "google.golang.org/grpc/xds"
 
 	log "github.com/authzed/spicedb/internal/logging"
+	ds2 "github.com/authzed/spicedb/internal/middleware/datastore"
 	"github.com/authzed/spicedb/pkg/cmd"
 	cmdutil "github.com/authzed/spicedb/pkg/cmd/server"
 	"github.com/authzed/spicedb/pkg/cmd/testserver"
@@ -80,6 +83,24 @@ func main() {
 	if err := cmd.RegisterServeFlags(serveCmd, serverConfig); err != nil {
 		log.Fatal().Err(err).Msg("failed to register server flags")
 	}
+
+	serveCmd.PreRunE = func(cmd *cobra.Command, args []string) error {
+		//ds := serverConfig.Datastore
+		ds, err := datastore.BuilderForEngine[serverConfig.DatastoreConfig.Engine](cmd.Context(), serverConfig.DatastoreConfig)
+		if err != nil {
+			return err
+		}
+		serverConfig.Datastore = ds
+		iterator, err := relationships.GetRelationships(ds2.ContextWithDatastore(ds2.ContextWithHandle(cmd.Context()), ds))
+		if err != nil {
+			return err
+		}
+		for val := iterator.Next(); val != nil; val = iterator.Next() {
+			println(val.Subject.ObjectId)
+		}
+		return nil
+	}
+
 	rootCmd.AddCommand(serveCmd)
 
 	devtoolsCmd := cmd.NewDevtoolsCommand(rootCmd.Use)
@@ -115,8 +136,6 @@ func main() {
 			return err
 		},
 	})
-
-	rootCmd.PreRun = func(cmd *cobra.Command, args []string) {}
 
 	if err := rootCmd.Execute(); err != nil {
 		if !errors.Is(err, errParsing) {

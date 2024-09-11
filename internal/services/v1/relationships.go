@@ -154,6 +154,17 @@ type permissionServer struct {
 	bulkChecker *bulkChecker
 }
 
+func GetRelationships(ctx context.Context) (datastore.RelationshipIterator, error) {
+	ds := datastoremw.MustFromContext(ctx)
+	newFilter := datastore.RelationshipsFilter{}
+	headRevision, err := ds.HeadRevision(ctx)
+	if err != nil {
+		return nil, err
+	}
+	iterator, err := pagination.NewPaginatedIterator(ctx, ds.SnapshotReader(headRevision), newFilter, 2048, options.ByResource, nil)
+	return iterator, err
+}
+
 func (ps *permissionServer) ReadRelationships(req *v1.ReadRelationshipsRequest, resp v1.PermissionsService_ReadRelationshipsServer) error {
 	if req.OptionalLimit > 0 && req.OptionalLimit > ps.config.MaxReadRelationshipsLimit {
 		return ps.rewriteError(resp.Context(), NewExceedsMaximumLimitErr(uint64(req.OptionalLimit), uint64(ps.config.MaxReadRelationshipsLimit)))
