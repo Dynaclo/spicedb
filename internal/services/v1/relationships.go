@@ -3,6 +3,7 @@ package v1
 import (
 	"context"
 	"fmt"
+	"github.com/authzed/spicedb/internal/indexer"
 	"time"
 
 	v1 "github.com/authzed/authzed-go/proto/authzed/api/v1"
@@ -325,6 +326,9 @@ func (ps *permissionServer) WriteRelationships(ctx context.Context, req *v1.Writ
 	span.AddEvent("read write transaction")
 	tupleUpdates := tuple.UpdateFromRelationshipUpdates(req.Updates)
 	//Smaran: Call our index here
+	for _, update := range tupleUpdates {
+		indexer.Index.InsertEdge(update.Tuple)
+	}
 	revision, err := ds.ReadWriteTx(ctx, func(ctx context.Context, rwt datastore.ReadWriteTransaction) error {
 		span.AddEvent("preconditions")
 

@@ -2,6 +2,7 @@ package indexer
 
 import (
 	"fmt"
+	v1 "github.com/authzed/authzed-go/proto/authzed/api/v1"
 	corev1 "github.com/authzed/spicedb/pkg/proto/core/v1"
 	"github.com/hmdsefi/gograph"
 	"math/rand"
@@ -31,7 +32,7 @@ type SV1 struct {
 var graph gograph.Graph[string]
 
 func makeNodeNameFromObjectRelationPair(relation *corev1.ObjectAndRelation) string {
-	return relation.Namespace + "#" + relation.ObjectId
+	return relation.Namespace + ":" + relation.ObjectId
 }
 
 func createVertexIfNeeded(relation *corev1.ObjectAndRelation) *gograph.Vertex[string] {
@@ -160,7 +161,13 @@ func (algo *SV1) recomputeRMinus() {
 	}
 }
 
-func (algo *SV1) InsertEdge(src string, dst string) error {
+func (algo *SV1) InsertEdge(tuple *corev1.RelationTuple) error {
+	src := makeNodeNameFromObjectRelationPair(tuple.ResourceAndRelation)
+	dest := makeNodeNameFromObjectRelationPair(tuple.Subject)
+	return algo.insertEdge(src, dest)
+}
+
+func (algo *SV1) insertEdge(src string, dst string) error {
 	srcVertex := algo.Graph.GetVertexByID(src)
 	if srcVertex == nil {
 		srcVertex = gograph.NewVertex(src)
@@ -184,6 +191,8 @@ func (algo *SV1) InsertEdge(src string, dst string) error {
 	//TODO: Make this not be a full recompute using an SSR data structure
 	algo.recomputeRPlus()
 	algo.recomputeRMinus()
+
+	fmt.Printf("Successfully inserted edge %s -> %s\n", src, dst)
 	return nil
 }
 
@@ -249,7 +258,22 @@ func directedBFS(graph gograph.Graph[string], src string, dst string) (bool, err
 	return false, nil
 }
 
-func (algo *SV1) CheckReachability(src string, dst string) (bool, error) {
+func (algo *SV1) Check(req *v1.CheckPermissionRequest) (v1.CheckPermissionResponse_Permissionship, error) {
+	src := req.Resource.ObjectType + ":" + req.Resource.ObjectId
+	dst := req.Subject.Object.ObjectType + ":" + req.Subject.Object.ObjectId
+	hasPermission, err := algo.checkReachability(src, dst)
+	if err != nil {
+		return v1.CheckPermissionResponse_PERMISSIONSHIP_NO_PERMISSION, err
+	}
+
+	if hasPermission {
+		return v1.CheckPermissionResponse_PERMISSIONSHIP_HAS_PERMISSION, nil
+	} else {
+		return v1.CheckPermissionResponse_PERMISSIONSHIP_NO_PERMISSION, nil
+	}
+}
+
+func (algo *SV1) checkReachability(src string, dst string) (bool, error) {
 	svLabel := algo.SV.Label()
 
 	//if src is support vertex
