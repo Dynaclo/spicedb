@@ -2,14 +2,10 @@ package indexer
 
 import (
 	"fmt"
-	v1 "github.com/authzed/authzed-go/proto/authzed/api/v1"
-	corev1 "github.com/authzed/spicedb/pkg/proto/core/v1"
 	"github.com/hmdsefi/gograph"
 	"math/rand"
 	"os"
 )
-
-var Index SV1
 
 // Fully Dynamic Transitive Closure Index
 type FullDynTCIndex interface {
@@ -27,41 +23,6 @@ type SV1 struct {
 	SV           *gograph.Vertex[string]
 	R_Plus       map[string]bool //store all vertices reachable from SV
 	R_Minus      map[string]bool //store all vertices that can reach SV
-}
-
-var graph gograph.Graph[string]
-
-func makeNodeNameFromObjectRelationPair(relation *corev1.ObjectAndRelation) string {
-	return relation.Namespace + ":" + relation.ObjectId
-}
-
-func createVertexIfNeeded(relation *corev1.ObjectAndRelation) *gograph.Vertex[string] {
-	if graph == nil {
-		graph = gograph.New[string](gograph.Directed())
-	}
-	name := makeNodeNameFromObjectRelationPair(relation)
-	vtx := graph.GetVertexByID(name)
-	if graph.GetVertexByID(name) == nil {
-		vtx = gograph.NewVertex[string](name)
-		graph.AddVertex(vtx)
-	}
-	return vtx
-
-}
-
-func AddEdge(tuple *corev1.RelationTuple) {
-	src := createVertexIfNeeded(tuple.ResourceAndRelation)
-	dest := createVertexIfNeeded(tuple.Subject)
-	_, err := graph.AddEdge(src, dest)
-	if err != nil {
-		panic(err)
-	}
-}
-
-func NewIndex() {
-	sv := SV1{}
-	sv.NewIndex(graph)
-	Index = sv
 }
 
 // maybe have a Init() fn return pointer to Graph object to which
@@ -161,12 +122,6 @@ func (algo *SV1) recomputeRMinus() {
 	}
 }
 
-func (algo *SV1) InsertEdge(tuple *corev1.RelationTuple) error {
-	src := makeNodeNameFromObjectRelationPair(tuple.ResourceAndRelation)
-	dest := makeNodeNameFromObjectRelationPair(tuple.Subject)
-	return algo.insertEdge(src, dest)
-}
-
 func (algo *SV1) insertEdge(src string, dst string) error {
 	srcVertex := algo.Graph.GetVertexByID(src)
 	if srcVertex == nil {
@@ -258,21 +213,6 @@ func directedBFS(graph gograph.Graph[string], src string, dst string) (bool, err
 	return false, nil
 }
 
-func (algo *SV1) Check(req *v1.CheckPermissionRequest) (v1.CheckPermissionResponse_Permissionship, error) {
-	src := req.Resource.ObjectType + ":" + req.Resource.ObjectId
-	dst := req.Subject.Object.ObjectType + ":" + req.Subject.Object.ObjectId
-	hasPermission, err := algo.checkReachability(src, dst)
-	if err != nil {
-		return v1.CheckPermissionResponse_PERMISSIONSHIP_NO_PERMISSION, err
-	}
-
-	if hasPermission {
-		return v1.CheckPermissionResponse_PERMISSIONSHIP_HAS_PERMISSION, nil
-	} else {
-		return v1.CheckPermissionResponse_PERMISSIONSHIP_NO_PERMISSION, nil
-	}
-}
-
 func (algo *SV1) checkReachability(src string, dst string) (bool, error) {
 	svLabel := algo.SV.Label()
 
@@ -341,11 +281,4 @@ func generateDotFile(graph gograph.Graph[string], filename string) error {
 
 	_, err = file.WriteString("}\n")
 	return err
-}
-
-func (algo *SV1) DumpGraph() {
-	err := generateDotFile(algo.Graph, "graph.dot")
-	if err != nil {
-		panic(err)
-	}
 }
