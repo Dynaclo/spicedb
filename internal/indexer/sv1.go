@@ -29,6 +29,9 @@ type SV1 struct {
 // vertices are added instead of taking in graph as param which casues huge copy
 // ok since it is a inti step tho ig
 func (algo *SV1) NewIndex(graph gograph.Graph[string]) {
+	if graph == nil {
+		return
+	}
 	algo.Graph = graph
 	fmt.Printf("hiiii")
 	print(algo.Graph)

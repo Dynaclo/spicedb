@@ -100,7 +100,7 @@ func main() {
 			indexer.AddEdge(val)
 		}
 		indexer.NewIndex()
-		indexer.Index.DumpGraph()
+		//indexer.Index.DumpGraph()
 		return nil
 	}
 
