@@ -6,7 +6,7 @@ import (
 	"github.com/hmdsefi/gograph"
 )
 
-var Index SV1
+var Index SVK
 var graph gograph.Graph[string]
 
 func AddEdge(tuple *corev1.RelationTuple) {
@@ -18,19 +18,24 @@ func AddEdge(tuple *corev1.RelationTuple) {
 	}
 }
 
+func StartIndexing() {
+	graph = gograph.New[string](gograph.Directed())
+
+}
+
 func NewIndex() {
-	sv := SV1{}
+	sv := SVK{numReads: -1}
 	sv.NewIndex(graph)
 	Index = sv
 }
 
-func (algo *SV1) InsertEdge(tuple *corev1.RelationTuple) error {
+func (algo *SVK) InsertEdge(tuple *corev1.RelationTuple) error {
 	src := makeNodeNameFromObjectRelationPair(tuple.ResourceAndRelation)
 	dest := makeNodeNameFromObjectRelationPair(tuple.Subject)
 	return algo.insertEdge(src, dest)
 }
 
-func (algo *SV1) Check(req *v1.CheckPermissionRequest) (v1.CheckPermissionResponse_Permissionship, error) {
+func (algo *SVK) Check(req *v1.CheckPermissionRequest) (v1.CheckPermissionResponse_Permissionship, error) {
 	src := req.Resource.ObjectType + ":" + req.Resource.ObjectId
 	dst := req.Subject.Object.ObjectType + ":" + req.Subject.Object.ObjectId
 	hasPermission, err := algo.checkReachability(src, dst)
@@ -45,7 +50,7 @@ func (algo *SV1) Check(req *v1.CheckPermissionRequest) (v1.CheckPermissionRespon
 	}
 }
 
-func (algo *SV1) DumpGraph() {
+func (algo *SVK) DumpGraph() {
 	err := generateDotFile(algo.Graph, "graph.dot")
 	if err != nil {
 		panic(err)

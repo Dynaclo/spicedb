@@ -17,43 +17,58 @@ type FullDynTCIndex interface {
 	CheckReachability(src string, dst string) (bool, error)
 }
 
-type SV1 struct {
+type SVK struct {
 	Graph        gograph.Graph[string]
 	ReverseGraph gograph.Graph[string]
 	SV           *gograph.Vertex[string]
 	R_Plus       map[string]bool //store all vertices reachable from SV
 	R_Minus      map[string]bool //store all vertices that can reach SV
+	numReads     int
+}
+
+const opsThreshold = 50
+
+func (algo *SVK) updateSvkOptionally() {
+	if algo.numReads == -1 {
+		algo.NewIndex(algo.Graph)
+	}
+	if algo.numReads > opsThreshold {
+		algo.numReads = 0
+		algo.pickSv()
+		algo.recalculateIndex()
+	}
 }
 
 // maybe have a Init() fn return pointer to Graph object to which
 // vertices are added instead of taking in graph as param which casues huge copy
 // ok since it is a inti step tho ig
-func (algo *SV1) NewIndex(graph gograph.Graph[string]) {
+func (algo *SVK) NewIndex(graph gograph.Graph[string]) {
 	if graph == nil {
-		return
+		graph = gograph.New[string](gograph.Directed())
+		src := gograph.NewVertex("empty:0")
+		dest := gograph.NewVertex("empty:1")
+		_, _ = graph.AddEdge(src, dest)
 	}
 	algo.Graph = graph
-	fmt.Printf("hiiii")
+
 	print(algo.Graph)
 	//make reverse DiGraph
+	algo.reverseGraph()
+
+	algo.pickSv()
+
+	algo.recalculateIndex()
+}
+
+func (algo *SVK) reverseGraph() {
 	algo.ReverseGraph = gograph.New[string](gograph.Directed())
 	for _, e := range algo.Graph.AllEdges() {
 		algo.ReverseGraph.AddEdge(e.Destination(), e.Source())
 	}
+}
 
-	//select support vertex
-	//TODO: implement getting random vertex in the library itself
+func (algo *SVK) recalculateIndex() {
 	vertices := algo.Graph.GetAllVertices()
-	randomIndex := rand.Intn(len(vertices))
-	algo.SV = vertices[randomIndex]
-
-	//make sure this is not a isolated vertex and repick if it is
-	for algo.SV.Degree() == 0 {
-		randomIndex = rand.Intn(len(vertices))
-		algo.SV = vertices[randomIndex]
-	}
-	fmt.Println(algo.SV.Label(), " chosen as SV")
-
 	//initialize R_Plus
 	algo.R_Plus = make(map[string]bool)
 	for _, v := range vertices {
@@ -69,7 +84,20 @@ func (algo *SV1) NewIndex(graph gograph.Graph[string]) {
 	algo.recomputeRMinus()
 }
 
-func (algo *SV1) recomputeRPlus() {
+func (algo *SVK) pickSv() {
+	vertices := algo.Graph.GetAllVertices()
+	randomIndex := rand.Intn(len(vertices))
+	algo.SV = vertices[randomIndex]
+
+	//make sure this is not a isolated vertex and repick if it is
+	for algo.SV.Degree() == 0 {
+		randomIndex = rand.Intn(len(vertices))
+		algo.SV = vertices[randomIndex]
+	}
+	fmt.Println(algo.SV.Label(), " chosen as SV")
+}
+
+func (algo *SVK) recomputeRPlus() {
 	// Initialize a queue for BFS
 	queue := []*gograph.Vertex[string]{algo.SV}
 
@@ -98,7 +126,7 @@ func (algo *SV1) recomputeRPlus() {
 	}
 }
 
-func (algo *SV1) recomputeRMinus() {
+func (algo *SVK) recomputeRMinus() {
 
 	queue := []*gograph.Vertex[string]{algo.SV}
 
@@ -125,7 +153,7 @@ func (algo *SV1) recomputeRMinus() {
 	}
 }
 
-func (algo *SV1) insertEdge(src string, dst string) error {
+func (algo *SVK) insertEdge(src string, dst string) error {
 	srcVertex := algo.Graph.GetVertexByID(src)
 	if srcVertex == nil {
 		srcVertex = gograph.NewVertex(src)
@@ -154,7 +182,7 @@ func (algo *SV1) insertEdge(src string, dst string) error {
 	return nil
 }
 
-func (algo *SV1) DeleteEdge(src string, dst string) error {
+func (algo *SVK) DeleteEdge(src string, dst string) error {
 	//TODO: Check if either src or dst are isolated after edgedelete and delete the node if they are not schema nodes
 	//TODO: IF deleted node is SV or if SV gets isolated repick SV
 
@@ -216,7 +244,8 @@ func directedBFS(graph gograph.Graph[string], src string, dst string) (bool, err
 	return false, nil
 }
 
-func (algo *SV1) checkReachability(src string, dst string) (bool, error) {
+func (algo *SVK) checkReachability(src string, dst string) (bool, error) {
+	algo.updateSvkOptionally()
 	svLabel := algo.SV.Label()
 
 	//if src is support vertex
@@ -259,6 +288,7 @@ func (algo *SV1) checkReachability(src string, dst string) (bool, error) {
 	if bfs == true {
 		return true, nil
 	}
+	algo.numReads++
 	return false, nil
 }
 
