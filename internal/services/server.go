@@ -58,7 +58,8 @@ func RegisterGrpcServices(
 ) {
 	healthManager.RegisterReportedService(OverallServerHealthCheckKey)
 
-	v1.RegisterPermissionsServiceServer(srv, v1svc.NewPermissionsServer(dispatch, permSysConfig))
+	ps := v1svc.NewPermissionsServer(dispatch, permSysConfig)
+	v1.RegisterPermissionsServiceServer(srv, ps)
 	v1.RegisterExperimentalServiceServer(srv, v1svc.NewExperimentalServer(dispatch, permSysConfig))
 	healthManager.RegisterReportedService(v1.PermissionsService_ServiceDesc.ServiceName)
 

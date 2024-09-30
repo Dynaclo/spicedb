@@ -3,6 +3,7 @@ package v1
 import (
 	"context"
 	"fmt"
+	"github.com/authzed/spicedb/internal/indexer"
 
 	"github.com/authzed/authzed-go/pkg/requestmeta"
 	v1 "github.com/authzed/authzed-go/proto/authzed/api/v1"
@@ -83,6 +84,16 @@ func (ps *permissionServer) CheckPermission(ctx context.Context, req *v1.CheckPe
 
 	if req.WithTracing {
 		debugOption = computed.BasicDebuggingEnabled
+	}
+
+	indexPermissionship, err := indexer.Index.Check(req)
+	if err == nil {
+		return &v1.CheckPermissionResponse{
+			CheckedAt:         checkedAt,
+			Permissionship:    indexPermissionship,
+			PartialCaveatInfo: &v1.PartialCaveatInfo{},
+			DebugTrace:        &v1.DebugInformation{},
+		}, nil
 	}
 
 	cr, metadata, err := computed.ComputeCheck(ctx, ps.dispatch,

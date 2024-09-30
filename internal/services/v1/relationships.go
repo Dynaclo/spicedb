@@ -3,6 +3,7 @@ package v1
 import (
 	"context"
 	"fmt"
+	"github.com/authzed/spicedb/internal/indexer"
 	"time"
 
 	v1 "github.com/authzed/authzed-go/proto/authzed/api/v1"
@@ -152,6 +153,17 @@ type permissionServer struct {
 	config   PermissionsServerConfig
 
 	bulkChecker *bulkChecker
+}
+
+func GetRelationships(ctx context.Context) (datastore.RelationshipIterator, error) {
+	ds := datastoremw.MustFromContext(ctx)
+	newFilter := datastore.RelationshipsFilter{}
+	headRevision, err := ds.HeadRevision(ctx)
+	if err != nil {
+		return nil, err
+	}
+	iterator, err := pagination.NewPaginatedIterator(ctx, ds.SnapshotReader(headRevision), newFilter, 2048, options.ByResource, nil)
+	return iterator, err
 }
 
 func (ps *permissionServer) ReadRelationships(req *v1.ReadRelationshipsRequest, resp v1.PermissionsService_ReadRelationshipsServer) error {
@@ -313,6 +325,10 @@ func (ps *permissionServer) WriteRelationships(ctx context.Context, req *v1.Writ
 	// Execute the write operation(s).
 	span.AddEvent("read write transaction")
 	tupleUpdates := tuple.UpdateFromRelationshipUpdates(req.Updates)
+	//Smaran: Call our index here
+	for _, update := range tupleUpdates {
+		indexer.Index.InsertEdge(update.Tuple)
+	}
 	revision, err := ds.ReadWriteTx(ctx, func(ctx context.Context, rwt datastore.ReadWriteTransaction) error {
 		span.AddEvent("preconditions")
 
