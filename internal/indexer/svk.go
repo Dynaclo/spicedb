@@ -74,14 +74,12 @@ func (algo *SVK) recalculateIndex() {
 	for _, v := range vertices {
 		algo.R_Plus[v.Label()] = false
 	}
-	algo.recomputeRPlus()
-
 	//initialize R_Minus
 	algo.R_Minus = make(map[string]bool)
 	for _, v := range vertices {
 		algo.R_Minus[v.Label()] = false
 	}
-	algo.recomputeRMinus()
+	algo.recompute()
 }
 
 func (algo *SVK) pickSv() {
@@ -95,6 +93,11 @@ func (algo *SVK) pickSv() {
 		algo.SV = vertices[randomIndex]
 	}
 	fmt.Println(algo.SV.Label(), " chosen as SV")
+}
+
+func (algo *SVK) recompute() {
+	go algo.recomputeRPlus()
+	go algo.recomputeRMinus()
 }
 
 func (algo *SVK) recomputeRPlus() {
@@ -175,8 +178,7 @@ func (algo *SVK) insertEdge(src string, dst string) error {
 
 	//update R+ and R-
 	//TODO: Make this not be a full recompute using an SSR data structure
-	algo.recomputeRPlus()
-	algo.recomputeRMinus()
+	algo.recompute()
 
 	fmt.Printf("Successfully inserted edge %s -> %s\n", src, dst)
 	return nil
@@ -197,8 +199,7 @@ func (algo *SVK) DeleteEdge(src string, dst string) error {
 	//TODO: Add error handling here for if vertex or edge does not exist
 
 	//TODO: Make this not be a full recompute using an SSR data structure
-	algo.recomputeRPlus()
-	algo.recomputeRMinus()
+	algo.recompute()
 	return nil
 }
 
