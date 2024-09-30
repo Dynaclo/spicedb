@@ -21,9 +21,19 @@ type SVK struct {
 	Graph        gograph.Graph[string]
 	ReverseGraph gograph.Graph[string]
 	SV           *gograph.Vertex[string]
-	R_Plus       map[string]bool //store all vertices reachable from SV
-	R_Minus      map[string]bool //store all vertices that can reach SV
+	R_Plus       *map[string]bool //store all vertices reachable from SV
+	R_Minus      *map[string]bool //store all vertices that can reach SV
 	numReads     int
+	blueQueue    *WriteQueue
+	greenQueue   *WriteQueue
+	CurrentQueue *WriteQueue
+}
+
+type Operation struct {
+	OpType      string // todo: make enum
+	Source      string
+	Destination string
+	Relation    string
 }
 
 const opsThreshold = 50
@@ -70,14 +80,16 @@ func (algo *SVK) reverseGraph() {
 func (algo *SVK) recalculateIndex() {
 	vertices := algo.Graph.GetAllVertices()
 	//initialize R_Plus
-	algo.R_Plus = make(map[string]bool)
+	_map := make(map[string]bool)
+	algo.R_Plus = &_map
 	for _, v := range vertices {
-		algo.R_Plus[v.Label()] = false
+		(*algo.R_Plus)[v.Label()] = false
 	}
 	//initialize R_Minus
-	algo.R_Minus = make(map[string]bool)
+	_map = make(map[string]bool)
+	algo.R_Minus = &_map
 	for _, v := range vertices {
-		algo.R_Minus[v.Label()] = false
+		(*algo.R_Minus)[v.Label()] = false
 	}
 	algo.recompute()
 }
@@ -105,8 +117,8 @@ func (algo *SVK) recomputeRPlus() {
 	queue := []*gograph.Vertex[string]{algo.SV}
 
 	// Reset R_Plus to mark all vertices as not reachable
-	for key := range algo.R_Plus {
-		algo.R_Plus[key] = false
+	for key := range *algo.R_Plus {
+		(*algo.R_Plus)[key] = false
 	}
 
 	// Start BFS
@@ -115,13 +127,13 @@ func (algo *SVK) recomputeRPlus() {
 		current := queue[0]
 		queue = queue[1:]
 
-		algo.R_Plus[current.Label()] = true
+		(*algo.R_Plus)[current.Label()] = true
 
 		// Enqueue all neighbors (vertices connected by an outgoing edge)
 		for _, edge := range algo.Graph.AllEdges() {
 			if edge.Source().Label() == current.Label() {
 				destVertex := edge.Destination()
-				if !algo.R_Plus[destVertex.Label()] {
+				if !(*algo.R_Plus)[destVertex.Label()] {
 					queue = append(queue, destVertex)
 				}
 			}
@@ -133,8 +145,8 @@ func (algo *SVK) recomputeRMinus() {
 
 	queue := []*gograph.Vertex[string]{algo.SV}
 
-	for key := range algo.R_Minus {
-		algo.R_Minus[key] = false
+	for key := range *algo.R_Minus {
+		(*algo.R_Minus)[key] = false
 	}
 
 	// Start BFS
@@ -143,12 +155,12 @@ func (algo *SVK) recomputeRMinus() {
 		current := queue[0]
 		queue = queue[1:]
 
-		algo.R_Minus[current.Label()] = true
+		(*algo.R_Minus)[current.Label()] = true
 
 		for _, edge := range algo.ReverseGraph.AllEdges() {
 			if edge.Source().Label() == current.Label() {
 				destVertex := edge.Destination()
-				if !algo.R_Minus[destVertex.Label()] {
+				if !(*algo.R_Minus)[destVertex.Label()] {
 					queue = append(queue, destVertex)
 				}
 			}
@@ -161,16 +173,16 @@ func (algo *SVK) insertEdge(src string, dst string) error {
 	if srcVertex == nil {
 		srcVertex = gograph.NewVertex(src)
 		algo.Graph.AddVertex(srcVertex)
-		algo.R_Plus[src] = false
-		algo.R_Minus[src] = false
+		(*algo.R_Plus)[src] = false
+		(*algo.R_Minus)[src] = false
 	}
 
 	dstVertex := algo.Graph.GetVertexByID(dst)
 	if dstVertex == nil {
 		dstVertex = gograph.NewVertex(dst)
 		algo.Graph.AddVertex(dstVertex)
-		algo.R_Plus[dst] = false
-		algo.R_Minus[dst] = false
+		(*algo.R_Plus)[dst] = false
+		(*algo.R_Minus)[dst] = false
 	}
 
 	algo.Graph.AddEdge(srcVertex, dstVertex)
@@ -252,29 +264,29 @@ func (algo *SVK) checkReachability(src string, dst string) (bool, error) {
 	//if src is support vertex
 	if svLabel == src {
 		fmt.Println("[CheckReachability][Resolved] Src vertex is SV")
-		return algo.R_Plus[dst], nil
+		return (*algo.R_Plus)[dst], nil
 	}
 
 	//if dest is support vertex
 	if svLabel == dst {
 		fmt.Println("[CheckReachability][Resolved] Dst vertex is SV")
-		return algo.R_Minus[dst], nil
+		return (*algo.R_Minus)[dst], nil
 	}
 
 	//try to apply O1
-	if algo.R_Minus[src] == true && algo.R_Plus[dst] == true {
+	if (*algo.R_Minus)[src] == true && (*algo.R_Plus)[dst] == true {
 		fmt.Println("[CheckReachability][Resolved] Using O1")
 		return true, nil
 	}
 
 	//try to apply O2
-	if algo.R_Plus[src] == true && algo.R_Plus[dst] == false {
+	if (*algo.R_Plus)[src] == true && (*algo.R_Plus)[dst] == false {
 		fmt.Println("[CheckReachability][Resolved] Using O2")
 		return false, nil
 	}
 
 	//try to apply O3
-	if algo.R_Minus[src] == false && algo.R_Minus[dst] == true {
+	if (*algo.R_Minus)[src] == false && (*algo.R_Minus)[dst] == true {
 		fmt.Println("[CheckReachability][Resolved] Using O3")
 		return false, nil
 	}

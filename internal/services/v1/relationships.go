@@ -328,6 +328,7 @@ func (ps *permissionServer) WriteRelationships(ctx context.Context, req *v1.Writ
 	//Smaran: Call our index here
 	for _, update := range tupleUpdates {
 		indexer.Index.InsertEdge(update.Tuple)
+		indexer.Index.CurrentQueue.InsertToQueue("insert", update.Tuple)
 	}
 	revision, err := ds.ReadWriteTx(ctx, func(ctx context.Context, rwt datastore.ReadWriteTransaction) error {
 		span.AddEvent("preconditions")
