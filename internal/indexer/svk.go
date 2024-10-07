@@ -3,6 +3,7 @@ package indexer
 import (
 	"errors"
 	"fmt"
+	"github.com/Dynaclo/Onyx"
 	log "github.com/authzed/spicedb/internal/logging"
 	"github.com/hmdsefi/gograph"
 	"math/rand"
@@ -26,9 +27,9 @@ type RPair struct {
 	R_Minus map[string]bool
 }
 type SVK struct {
-	Graph         gograph.Graph[string]
-	ReverseGraph  gograph.Graph[string]
-	SV            *gograph.Vertex[string]
+	Graph         *Onyx.Graph
+	ReverseGraph  *Onyx.Graph
+	SV            string
 	RPairMutex    sync.RWMutex
 	RPair         *RPair
 	numReads      int
@@ -98,12 +99,17 @@ func (algo *SVK) updateSvkOptionally() {
 // maybe have a Init() fn return pointer to Graph object to which
 // vertices are added instead of taking in graph as param which casues huge copy
 // ok since it is a inti step tho ig
-func (algo *SVK) NewIndex(graph gograph.Graph[string]) {
+func (algo *SVK) NewIndex(graph *Onyx.Graph) error {
 	if graph == nil {
-		graph = gograph.New[string](gograph.Directed())
-		src := gograph.NewVertex("empty:0")
-		dest := gograph.NewVertex("empty:1")
-		_, _ = graph.AddEdge(src, dest)
+		graph, err := Onyx.NewGraph("./onyx-graph", false)
+		if err != nil {
+			return err
+		}
+
+		err = graph.AddEdge("empty:0", "empty:1", nil)
+		if err != nil {
+			return err
+		}
 	}
 	algo.Graph = graph
 
@@ -116,8 +122,12 @@ func (algo *SVK) NewIndex(graph gograph.Graph[string]) {
 	algo.initializeRplusAndRminusAtStartupTime()
 }
 
-func (algo *SVK) reverseGraph() {
-	algo.ReverseGraph = gograph.New[string](gograph.Directed())
+func (algo *SVK) reverseGraph() error {
+	var err error
+	algo.ReverseGraph, err = Onyx.NewGraph("./onyx-graph-rev", false)
+	if err != nil {
+		return err
+	}
 	for _, e := range algo.Graph.AllEdges() {
 		algo.ReverseGraph.AddEdge(e.Destination(), e.Source())
 	}
