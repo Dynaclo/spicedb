@@ -4,6 +4,7 @@ import (
 	v1 "github.com/authzed/authzed-go/proto/authzed/api/v1"
 	corev1 "github.com/authzed/spicedb/pkg/proto/core/v1"
 	"github.com/hmdsefi/gograph"
+	"sync"
 )
 
 var Index SVK
@@ -18,13 +19,10 @@ func AddEdge(tuple *corev1.RelationTuple) {
 	}
 }
 
-func StartIndexing() {
-	graph = gograph.New[string](gograph.Directed())
-
-}
-
 func NewIndex() {
-	sv := SVK{numReads: -1}
+	blueQueue := NewWriteQueue(100)
+	sv := SVK{numReads: -1, blueQueue: blueQueue, greenQueue: NewWriteQueue(100), CurQueueLock: sync.RWMutex{}, RPair: &RPair{}}
+	sv.CurrentQueue = blueQueue
 	sv.NewIndex(graph)
 	Index = sv
 }

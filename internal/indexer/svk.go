@@ -1,10 +1,14 @@
 package indexer
 
 import (
+	"errors"
 	"fmt"
+	log "github.com/authzed/spicedb/internal/logging"
 	"github.com/hmdsefi/gograph"
 	"math/rand"
 	"os"
+	"sync"
+	"time"
 )
 
 // Fully Dynamic Transitive Closure Index
@@ -17,16 +21,22 @@ type FullDynTCIndex interface {
 	CheckReachability(src string, dst string) (bool, error)
 }
 
+type RPair struct {
+	R_Plus  map[string]bool
+	R_Minus map[string]bool
+}
 type SVK struct {
 	Graph        gograph.Graph[string]
 	ReverseGraph gograph.Graph[string]
 	SV           *gograph.Vertex[string]
-	R_Plus       *map[string]bool //store all vertices reachable from SV
-	R_Minus      *map[string]bool //store all vertices that can reach SV
+	RPairMutex   sync.RWMutex
+	RPair        *RPair
 	numReads     int
 	blueQueue    *WriteQueue
 	greenQueue   *WriteQueue
+	CurQueueLock sync.RWMutex
 	CurrentQueue *WriteQueue
+	lastUpdated  time.Time
 }
 
 type Operation struct {
@@ -37,16 +47,45 @@ type Operation struct {
 }
 
 const opsThreshold = 50
+const timeThresholdMillis = 500 * time.Millisecond
+
+func (algo *SVK) applyWrites() {
+	prevQueue := algo.CurrentQueue
+	algo.CurQueueLock.Lock()
+	if algo.CurrentQueue == algo.blueQueue {
+		algo.CurrentQueue = algo.greenQueue
+	} else {
+		algo.CurrentQueue = algo.blueQueue
+	}
+	algo.CurQueueLock.Unlock()
+	operations := prevQueue.DrainQueue()
+
+	for _, operation := range operations {
+		if operation.OpType == "insert" {
+			err := algo.insertEdge(operation.Source, operation.Destination)
+			if err != nil {
+				log.Warn().Err(err)
+			}
+		} else if operation.OpType == "delete" {
+			//err := algo.dele
+		}
+	}
+	algo.recompute()
+}
 
 func (algo *SVK) updateSvkOptionally() {
-	if algo.numReads == -1 {
-		algo.NewIndex(algo.Graph)
+	if algo.CurrentQueue.Available != algo.CurrentQueue.Size {
+		// we have writes in queue
+		if algo.lastUpdated.Add(timeThresholdMillis).After(time.Now()) {
+			// we must apply writes
+			algo.applyWrites()
+		}
 	}
-	if algo.numReads > opsThreshold {
-		algo.numReads = 0
-		algo.pickSv()
-		algo.recalculateIndex()
-	}
+	//if algo.numReads > opsThreshold {
+	//	algo.numReads = 0
+	//	algo.pickSv()
+	//	algo.recalculateIndex()
+	//}
 }
 
 // maybe have a Init() fn return pointer to Graph object to which
@@ -81,16 +120,18 @@ func (algo *SVK) recalculateIndex() {
 	vertices := algo.Graph.GetAllVertices()
 	//initialize R_Plus
 	_map := make(map[string]bool)
-	algo.R_Plus = &_map
+	algo.RPairMutex.Lock()
+	algo.RPair.R_Plus = _map
 	for _, v := range vertices {
-		(*algo.R_Plus)[v.Label()] = false
+		algo.RPair.R_Plus[v.Label()] = false
 	}
 	//initialize R_Minus
 	_map = make(map[string]bool)
-	algo.R_Minus = &_map
+	algo.RPair.R_Minus = _map
 	for _, v := range vertices {
-		(*algo.R_Minus)[v.Label()] = false
+		algo.RPair.R_Minus[v.Label()] = false
 	}
+	algo.RPairMutex.Unlock()
 	algo.recompute()
 }
 
@@ -108,17 +149,25 @@ func (algo *SVK) pickSv() {
 }
 
 func (algo *SVK) recompute() {
-	go algo.recomputeRPlus()
-	go algo.recomputeRMinus()
+	copyOfRpair := *algo.RPair
+	wg := sync.WaitGroup{}
+	wg.Add(2)
+	go algo.recomputeRPlus(&copyOfRpair, &wg)
+	go algo.recomputeRMinus(&copyOfRpair, &wg)
+	wg.Wait()
+	algo.RPairMutex.Lock()
+	defer algo.RPairMutex.Unlock()
+	algo.RPair = &copyOfRpair
 }
 
-func (algo *SVK) recomputeRPlus() {
+func (algo *SVK) recomputeRPlus(pair *RPair, wg *sync.WaitGroup) {
+	defer wg.Done()
 	// Initialize a queue for BFS
 	queue := []*gograph.Vertex[string]{algo.SV}
 
 	// Reset R_Plus to mark all vertices as not reachable
-	for key := range *algo.R_Plus {
-		(*algo.R_Plus)[key] = false
+	for key := range pair.R_Plus {
+		pair.R_Plus[key] = false
 	}
 
 	// Start BFS
@@ -127,13 +176,13 @@ func (algo *SVK) recomputeRPlus() {
 		current := queue[0]
 		queue = queue[1:]
 
-		(*algo.R_Plus)[current.Label()] = true
+		pair.R_Plus[current.Label()] = true
 
 		// Enqueue all neighbors (vertices connected by an outgoing edge)
 		for _, edge := range algo.Graph.AllEdges() {
 			if edge.Source().Label() == current.Label() {
 				destVertex := edge.Destination()
-				if !(*algo.R_Plus)[destVertex.Label()] {
+				if !pair.R_Plus[destVertex.Label()] {
 					queue = append(queue, destVertex)
 				}
 			}
@@ -141,12 +190,12 @@ func (algo *SVK) recomputeRPlus() {
 	}
 }
 
-func (algo *SVK) recomputeRMinus() {
-
+func (algo *SVK) recomputeRMinus(pair *RPair, wg *sync.WaitGroup) {
+	defer wg.Done()
 	queue := []*gograph.Vertex[string]{algo.SV}
 
-	for key := range *algo.R_Minus {
-		(*algo.R_Minus)[key] = false
+	for key := range pair.R_Minus {
+		pair.R_Minus[key] = false
 	}
 
 	// Start BFS
@@ -155,12 +204,12 @@ func (algo *SVK) recomputeRMinus() {
 		current := queue[0]
 		queue = queue[1:]
 
-		(*algo.R_Minus)[current.Label()] = true
+		pair.R_Minus[current.Label()] = true
 
 		for _, edge := range algo.ReverseGraph.AllEdges() {
 			if edge.Source().Label() == current.Label() {
 				destVertex := edge.Destination()
-				if !(*algo.R_Minus)[destVertex.Label()] {
+				if !pair.R_Minus[destVertex.Label()] {
 					queue = append(queue, destVertex)
 				}
 			}
@@ -173,24 +222,19 @@ func (algo *SVK) insertEdge(src string, dst string) error {
 	if srcVertex == nil {
 		srcVertex = gograph.NewVertex(src)
 		algo.Graph.AddVertex(srcVertex)
-		(*algo.R_Plus)[src] = false
-		(*algo.R_Minus)[src] = false
 	}
 
 	dstVertex := algo.Graph.GetVertexByID(dst)
 	if dstVertex == nil {
 		dstVertex = gograph.NewVertex(dst)
 		algo.Graph.AddVertex(dstVertex)
-		(*algo.R_Plus)[dst] = false
-		(*algo.R_Minus)[dst] = false
 	}
 
 	algo.Graph.AddEdge(srcVertex, dstVertex)
 	algo.ReverseGraph.AddEdge(dstVertex, srcVertex)
 
-	//update R+ and R-
-	//TODO: Make this not be a full recompute using an SSR data structure
-	algo.recompute()
+	////TODO: Make this not be a full recompute using an SSR data structure
+	//algo.recompute()
 
 	fmt.Printf("Successfully inserted edge %s -> %s\n", src, dst)
 	return nil
@@ -211,6 +255,8 @@ func (algo *SVK) DeleteEdge(src string, dst string) error {
 	//TODO: Add error handling here for if vertex or edge does not exist
 
 	//TODO: Make this not be a full recompute using an SSR data structure
+	algo.RPairMutex.Lock()
+	defer algo.RPairMutex.Unlock()
 	algo.recompute()
 	return nil
 }
@@ -264,29 +310,34 @@ func (algo *SVK) checkReachability(src string, dst string) (bool, error) {
 	//if src is support vertex
 	if svLabel == src {
 		fmt.Println("[CheckReachability][Resolved] Src vertex is SV")
-		return (*algo.R_Plus)[dst], nil
+		return algo.RPair.R_Plus[dst], nil
 	}
+
+	if !algo.RPairMutex.TryRLock() {
+		return false, errors.New("[CheckReachability][Unresoled] failed to get RLock")
+	}
+	defer algo.RPairMutex.RUnlock()
 
 	//if dest is support vertex
 	if svLabel == dst {
 		fmt.Println("[CheckReachability][Resolved] Dst vertex is SV")
-		return (*algo.R_Minus)[dst], nil
+		return algo.RPair.R_Minus[dst], nil
 	}
 
 	//try to apply O1
-	if (*algo.R_Minus)[src] == true && (*algo.R_Plus)[dst] == true {
+	if algo.RPair.R_Minus[src] == true && algo.RPair.R_Plus[dst] == true {
 		fmt.Println("[CheckReachability][Resolved] Using O1")
 		return true, nil
 	}
 
 	//try to apply O2
-	if (*algo.R_Plus)[src] == true && (*algo.R_Plus)[dst] == false {
+	if algo.RPair.R_Plus[src] == true && algo.RPair.R_Plus[dst] == false {
 		fmt.Println("[CheckReachability][Resolved] Using O2")
 		return false, nil
 	}
 
 	//try to apply O3
-	if (*algo.R_Minus)[src] == false && (*algo.R_Minus)[dst] == true {
+	if algo.RPair.R_Minus[src] == false && algo.RPair.R_Minus[dst] == true {
 		fmt.Println("[CheckReachability][Resolved] Using O3")
 		return false, nil
 	}
