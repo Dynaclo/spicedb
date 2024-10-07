@@ -26,17 +26,18 @@ type RPair struct {
 	R_Minus map[string]bool
 }
 type SVK struct {
-	Graph        gograph.Graph[string]
-	ReverseGraph gograph.Graph[string]
-	SV           *gograph.Vertex[string]
-	RPairMutex   sync.RWMutex
-	RPair        *RPair
-	numReads     int
-	blueQueue    *WriteQueue
-	greenQueue   *WriteQueue
-	CurQueueLock sync.RWMutex
-	CurrentQueue *WriteQueue
-	lastUpdated  time.Time
+	Graph         gograph.Graph[string]
+	ReverseGraph  gograph.Graph[string]
+	SV            *gograph.Vertex[string]
+	RPairMutex    sync.RWMutex
+	RPair         *RPair
+	numReads      int
+	blueQueue     *WriteQueue
+	greenQueue    *WriteQueue
+	CurQueueLock  sync.RWMutex
+	CurrentQueue  *WriteQueue
+	lastUpdated   time.Time
+	lastUpdatedMu sync.Mutex
 }
 
 type Operation struct {
@@ -50,6 +51,10 @@ const opsThreshold = 50
 const timeThresholdMillis = 500 * time.Millisecond
 
 func (algo *SVK) applyWrites() {
+	if !algo.lastUpdatedMu.TryLock() {
+		return
+	}
+	defer algo.lastUpdatedMu.Unlock()
 	prevQueue := algo.CurrentQueue
 	algo.CurQueueLock.Lock()
 	if algo.CurrentQueue == algo.blueQueue {
@@ -70,13 +75,15 @@ func (algo *SVK) applyWrites() {
 			//err := algo.dele
 		}
 	}
+	algo.pickSv()
 	algo.recompute()
+	algo.lastUpdated = time.Now()
 }
 
 func (algo *SVK) updateSvkOptionally() {
 	if algo.CurrentQueue.Available != algo.CurrentQueue.Size {
 		// we have writes in queue
-		if algo.lastUpdated.Add(timeThresholdMillis).After(time.Now()) {
+		if algo.lastUpdated.Add(timeThresholdMillis).Before(time.Now()) {
 			// we must apply writes
 			algo.applyWrites()
 		}
@@ -84,7 +91,7 @@ func (algo *SVK) updateSvkOptionally() {
 	//if algo.numReads > opsThreshold {
 	//	algo.numReads = 0
 	//	algo.pickSv()
-	//	algo.recalculateIndex()
+	//	algo.initializeRplusAndRminusAtStartupTime()
 	//}
 }
 
@@ -106,7 +113,7 @@ func (algo *SVK) NewIndex(graph gograph.Graph[string]) {
 
 	algo.pickSv()
 
-	algo.recalculateIndex()
+	algo.initializeRplusAndRminusAtStartupTime()
 }
 
 func (algo *SVK) reverseGraph() {
@@ -116,7 +123,7 @@ func (algo *SVK) reverseGraph() {
 	}
 }
 
-func (algo *SVK) recalculateIndex() {
+func (algo *SVK) initializeRplusAndRminusAtStartupTime() {
 	vertices := algo.Graph.GetAllVertices()
 	//initialize R_Plus
 	_map := make(map[string]bool)

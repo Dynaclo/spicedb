@@ -5,6 +5,7 @@ import (
 	corev1 "github.com/authzed/spicedb/pkg/proto/core/v1"
 	"github.com/hmdsefi/gograph"
 	"sync"
+	"time"
 )
 
 var Index SVK
@@ -21,7 +22,7 @@ func AddEdge(tuple *corev1.RelationTuple) {
 
 func NewIndex() {
 	blueQueue := NewWriteQueue(100)
-	sv := SVK{numReads: -1, blueQueue: blueQueue, greenQueue: NewWriteQueue(100), CurQueueLock: sync.RWMutex{}, RPair: &RPair{}}
+	sv := SVK{numReads: -1, blueQueue: blueQueue, greenQueue: NewWriteQueue(100), CurQueueLock: sync.RWMutex{}, RPair: &RPair{}, lastUpdated: time.Now(), lastUpdatedMu: sync.Mutex{}}
 	sv.CurrentQueue = blueQueue
 	sv.NewIndex(graph)
 	Index = sv
