@@ -120,6 +120,8 @@ func (algo *SVK) NewIndex(graph *Onyx.Graph) error {
 	algo.pickSv()
 
 	algo.initializeRplusAndRminusAtStartupTime()
+
+	return nil
 }
 
 func (algo *SVK) reverseGraph() error {
@@ -128,26 +130,30 @@ func (algo *SVK) reverseGraph() error {
 	if err != nil {
 		return err
 	}
-	for _, e := range algo.Graph.AllEdges() {
-		algo.ReverseGraph.AddEdge(e.Destination(), e.Source())
+
+	revGraphTxn := algo.ReverseGraph.DB.NewTransaction(true)
+	defer revGraphTxn.Discard()
+
+	err = algo.Graph.IterAllEdges(func(src string, dst string) error {
+		algo.ReverseGraph.AddEdge(dst, src, revGraphTxn)
+		return nil
+	}, 25, nil)
+	//do NOT pass revGraphTxn to This IterAllEdges, they are 2 DIFFERENT badger stores
+
+	if err != nil {
+		return err
 	}
+
+	err = revGraphTxn.Commit()
+	return err
 }
 
 func (algo *SVK) initializeRplusAndRminusAtStartupTime() {
-	vertices := algo.Graph.GetAllVertices()
-	//initialize R_Plus
-	_map := make(map[string]bool)
 	algo.RPairMutex.Lock()
-	algo.RPair.R_Plus = _map
-	for _, v := range vertices {
-		algo.RPair.R_Plus[v.Label()] = false
-	}
+	//initialize R_Plus
+	algo.RPair.R_Plus = make(map[string]bool)
 	//initialize R_Minus
-	_map = make(map[string]bool)
-	algo.RPair.R_Minus = _map
-	for _, v := range vertices {
-		algo.RPair.R_Minus[v.Label()] = false
-	}
+	algo.RPair.R_Minus = make(map[string]bool)
 	algo.RPairMutex.Unlock()
 	algo.recompute()
 }

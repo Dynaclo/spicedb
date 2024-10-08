@@ -121,7 +121,7 @@ require (
 	cloud.google.com/go/auth v0.7.2 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.3 // indirect
 	github.com/Crocmagnon/fatcontext v0.2.2 // indirect
-	github.com/Dynaclo/Onyx v0.0.0-20241007130032-51d0caf2af9e // indirect
+	github.com/Dynaclo/Onyx v0.1.1 // indirect
 	github.com/GoogleCloudPlatform/grpc-gcp-go/grpcgcp v1.5.0 // indirect
 	github.com/Masterminds/semver/v3 v3.2.1 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.0 // indirect
