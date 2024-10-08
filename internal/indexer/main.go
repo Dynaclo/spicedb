@@ -1,20 +1,27 @@
 package indexer
 
 import (
+	"github.com/Dynaclo/Onyx"
 	v1 "github.com/authzed/authzed-go/proto/authzed/api/v1"
 	corev1 "github.com/authzed/spicedb/pkg/proto/core/v1"
-	"github.com/hmdsefi/gograph"
 	"sync"
 	"time"
 )
 
 var Index SVK
-var graph gograph.Graph[string]
+var graph *Onyx.Graph
 
 func AddEdge(tuple *corev1.RelationTuple) {
-	src := createVertexIfNeeded(tuple.ResourceAndRelation)
-	dest := createVertexIfNeeded(tuple.Subject)
-	_, err := graph.AddEdge(src, dest)
+	if graph == nil {
+		var err error
+		graph, err = Onyx.NewGraph("/tmp/tmpgraph", false)
+		if err != nil {
+			panic(err)
+		}
+	}
+	src := makeNodeNameFromObjectRelationPair(tuple.ResourceAndRelation)
+	dest := makeNodeNameFromObjectRelationPair(tuple.Subject)
+	err := graph.AddEdge(src, dest, nil)
 	if err != nil {
 		panic(err)
 	}
@@ -49,27 +56,13 @@ func (algo *SVK) Check(req *v1.CheckPermissionRequest) (v1.CheckPermissionRespon
 	}
 }
 
-func (algo *SVK) DumpGraph() {
-	err := generateDotFile(algo.Graph, "graph.dot")
-	if err != nil {
-		panic(err)
-	}
-}
+//func (algo *SVK) DumpGraph() {
+//	err := generateDotFile(algo.Graph, "graph.dot")
+//	if err != nil {
+//		panic(err)
+//	}
+//}
 
 func makeNodeNameFromObjectRelationPair(relation *corev1.ObjectAndRelation) string {
 	return relation.Namespace + ":" + relation.ObjectId
-}
-
-func createVertexIfNeeded(relation *corev1.ObjectAndRelation) *gograph.Vertex[string] {
-	if graph == nil {
-		graph = gograph.New[string](gograph.Directed())
-	}
-	name := makeNodeNameFromObjectRelationPair(relation)
-	vtx := graph.GetVertexByID(name)
-	if graph.GetVertexByID(name) == nil {
-		vtx = gograph.NewVertex[string](name)
-		graph.AddVertex(vtx)
-	}
-	return vtx
-
 }
