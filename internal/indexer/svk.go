@@ -183,14 +183,14 @@ func (algo *SVK) recompute() {
 	algo.RPair = &copyOfRpair
 }
 
-func (algo *SVK) recomputeRPlus(pair *RPair, wg *sync.WaitGroup) {
+func (algo *SVK) recomputeRPlus(pair *RPair, wg *sync.WaitGroup) error {
 	defer wg.Done()
 	// Initialize a queue for BFS
-	queue := []*gograph.Vertex[string]{algo.SV}
+	queue := []string{algo.SV}
 
 	// Reset R_Plus to mark all vertices as not reachable
 	for key := range pair.R_Plus {
-		pair.R_Plus[key] = false
+		delete(pair.R_Plus, key)
 	}
 
 	// Start BFS
@@ -199,26 +199,29 @@ func (algo *SVK) recomputeRPlus(pair *RPair, wg *sync.WaitGroup) {
 		current := queue[0]
 		queue = queue[1:]
 
-		pair.R_Plus[current.Label()] = true
+		pair.R_Plus[current] = true
 
 		// Enqueue all neighbors (vertices connected by an outgoing edge)
-		for _, edge := range algo.Graph.AllEdges() {
-			if edge.Source().Label() == current.Label() {
-				destVertex := edge.Destination()
-				if !pair.R_Plus[destVertex.Label()] {
-					queue = append(queue, destVertex)
-				}
+		neighbors, err := algo.Graph.GetEdges(current, nil)
+		if err != nil {
+			return err
+		}
+		for destVertex, _ := range neighbors {
+			if !pair.R_Plus[destVertex] {
+				queue = append(queue, destVertex)
 			}
 		}
 	}
+
+	return nil
 }
 
-func (algo *SVK) recomputeRMinus(pair *RPair, wg *sync.WaitGroup) {
+func (algo *SVK) recomputeRMinus(pair *RPair, wg *sync.WaitGroup) error {
 	defer wg.Done()
-	queue := []*gograph.Vertex[string]{algo.SV}
+	queue := []string{algo.SV}
 
 	for key := range pair.R_Minus {
-		pair.R_Minus[key] = false
+		delete(pair.R_Minus, key)
 	}
 
 	// Start BFS
@@ -227,34 +230,31 @@ func (algo *SVK) recomputeRMinus(pair *RPair, wg *sync.WaitGroup) {
 		current := queue[0]
 		queue = queue[1:]
 
-		pair.R_Minus[current.Label()] = true
+		pair.R_Minus[current] = true
 
-		for _, edge := range algo.ReverseGraph.AllEdges() {
-			if edge.Source().Label() == current.Label() {
-				destVertex := edge.Destination()
-				if !pair.R_Minus[destVertex.Label()] {
-					queue = append(queue, destVertex)
-				}
+		neighbors, err := algo.ReverseGraph.GetEdges(current, nil)
+		if err != nil {
+			return err
+		}
+		for destVertex, _ := range neighbors {
+			if !pair.R_Minus[destVertex] {
+				queue = append(queue, destVertex)
 			}
 		}
 	}
+
+	return nil
 }
 
 func (algo *SVK) insertEdge(src string, dst string) error {
-	srcVertex := algo.Graph.GetVertexByID(src)
-	if srcVertex == nil {
-		srcVertex = gograph.NewVertex(src)
-		algo.Graph.AddVertex(srcVertex)
+	err := algo.Graph.AddEdge(src, dst, nil)
+	if err != nil {
+		return err
 	}
-
-	dstVertex := algo.Graph.GetVertexByID(dst)
-	if dstVertex == nil {
-		dstVertex = gograph.NewVertex(dst)
-		algo.Graph.AddVertex(dstVertex)
+	err = algo.ReverseGraph.AddEdge(dst, src, nil)
+	if err != nil {
+		return err
 	}
-
-	algo.Graph.AddEdge(srcVertex, dstVertex)
-	algo.ReverseGraph.AddEdge(dstVertex, srcVertex)
 
 	////TODO: Make this not be a full recompute using an SSR data structure
 	//algo.recompute()
@@ -267,14 +267,15 @@ func (algo *SVK) DeleteEdge(src string, dst string) error {
 	//TODO: Check if either src or dst are isolated after edgedelete and delete the node if they are not schema nodes
 	//TODO: IF deleted node is SV or if SV gets isolated repick SV
 
-	srcVertex := algo.Graph.GetVertexByID(src)
-	dstVertex := algo.Graph.GetVertexByID(dst)
+	err := algo.Graph.RemoveEdge(src, dst, nil)
+	if err != nil {
+		return err
+	}
 
-	edge := algo.Graph.GetEdge(srcVertex, dstVertex)
-	algo.Graph.RemoveEdges(edge)
-
-	rev_edge := algo.ReverseGraph.GetEdge(dstVertex, srcVertex)
-	algo.ReverseGraph.RemoveEdges(rev_edge)
+	err = algo.ReverseGraph.RemoveEdge(dst, src, nil)
+	if err != nil {
+		return err
+	}
 	//TODO: Add error handling here for if vertex or edge does not exist
 
 	//TODO: Make this not be a full recompute using an SSR data structure
@@ -285,18 +286,14 @@ func (algo *SVK) DeleteEdge(src string, dst string) error {
 }
 
 // Directed BFS implementation
-func directedBFS(graph gograph.Graph[string], src string, dst string) (bool, error) {
+func directedBFS(graph *Onyx.Graph, src string, dst string) (bool, error) {
 
-	queue := []*gograph.Vertex[string]{}
+	queue := []string{}
 
 	visited := make(map[string]bool)
 
 	// Start BFS from the source vertex
-	startVertex := graph.GetVertexByID(src)
-	if startVertex == nil {
-		return false, fmt.Errorf("source vertex %s not found", src)
-	}
-	queue = append(queue, startVertex)
+	queue = append(queue, src)
 	visited[src] = true
 
 	for len(queue) > 0 {
@@ -305,19 +302,20 @@ func directedBFS(graph gograph.Graph[string], src string, dst string) (bool, err
 		queue = queue[1:]
 
 		// If we reach the destination vertex return true
-		if currentVertex.Label() == dst {
+		if currentVertex == dst {
 			return true, nil
 		}
 
+		neighbors, err := graph.GetEdges(currentVertex, nil)
+		if err != nil {
+			return false, nil
+		}
 		// Get all edges from the current vertex
-		for _, edge := range graph.AllEdges() {
+		for nextVertex, _ := range neighbors {
 			// Check if the edge starts from the current vertex (directed edge)
-			if edge.Source().Label() == currentVertex.Label() {
-				nextVertex := edge.Destination()
-				if !visited[nextVertex.Label()] {
-					visited[nextVertex.Label()] = true
-					queue = append(queue, nextVertex)
-				}
+			if !visited[nextVertex] {
+				visited[nextVertex] = true
+				queue = append(queue, nextVertex)
 			}
 		}
 	}
@@ -328,7 +326,7 @@ func directedBFS(graph gograph.Graph[string], src string, dst string) (bool, err
 
 func (algo *SVK) checkReachability(src string, dst string) (bool, error) {
 	algo.updateSvkOptionally()
-	svLabel := algo.SV.Label()
+	svLabel := algo.SV
 
 	//if src is support vertex
 	if svLabel == src {
