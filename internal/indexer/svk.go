@@ -6,7 +6,6 @@ import (
 	"github.com/Dynaclo/Onyx"
 	log "github.com/authzed/spicedb/internal/logging"
 	"github.com/hmdsefi/gograph"
-	"math/rand"
 	"os"
 	"sync"
 	"time"
@@ -158,17 +157,40 @@ func (algo *SVK) initializeRplusAndRminusAtStartupTime() {
 	algo.recompute()
 }
 
-func (algo *SVK) pickSv() {
-	vertices := algo.Graph.GetAllVertices()
-	randomIndex := rand.Intn(len(vertices))
-	algo.SV = vertices[randomIndex]
+func (algo *SVK) pickSv() error {
+	vertex, err := algo.Graph.PickRandomVertex(nil)
+	if err != nil {
+		return err
+	}
+	algo.SV = vertex
 
 	//make sure this is not a isolated vertex and repick if it is
-	for algo.SV.Degree() == 0 {
-		randomIndex = rand.Intn(len(vertices))
-		algo.SV = vertices[randomIndex]
+	outDegree, err := algo.Graph.OutDegree(algo.SV, nil)
+	if err != nil {
+		return err
 	}
-	fmt.Println(algo.SV.Label(), " chosen as SV")
+	inDegree, err := algo.ReverseGraph.OutDegree(algo.SV, nil)
+	if err != nil {
+		return err
+	}
+	for outDegree == 0 && inDegree == 0 {
+		vertex, err = algo.Graph.PickRandomVertex(nil)
+		if err != nil {
+			return err
+		}
+		algo.SV = vertex
+
+		outDegree, err = algo.Graph.OutDegree(algo.SV, nil)
+		if err != nil {
+			return err
+		}
+		inDegree, err = algo.ReverseGraph.OutDegree(algo.SV, nil)
+		if err != nil {
+			return err
+		}
+	}
+	fmt.Println(algo.SV, " chosen as SV")
+	return nil
 }
 
 func (algo *SVK) recompute() {
