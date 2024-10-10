@@ -5,3 +5,4 @@ completions/
 .env.local
 coverage.txt
 .idea/
+onyx-*

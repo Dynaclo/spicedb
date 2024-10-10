@@ -7,7 +7,7 @@ require (
 	cloud.google.com/go/spanner v1.65.0
 	contrib.go.opencensus.io/exporter/prometheus v0.4.2
 	github.com/IBM/pgxpoolprometheus v1.1.1
-	github.com/KimMachineGun/automemlimit v0.6.1 // indirect
+	github.com/KimMachineGun/automemlimit v0.6.1
 	github.com/Masterminds/squirrel v1.5.4
 	github.com/authzed/authzed-go v0.14.0
 
@@ -110,8 +110,10 @@ require (
 )
 
 require (
+	github.com/Dynaclo/Onyx v0.3.2
 	github.com/Yiling-J/theine-go v0.3.2
 	github.com/gosimple/slug v1.14.0
+	github.com/hmdsefi/gograph v0.4.2
 	github.com/lithammer/fuzzysearch v1.1.8
 	github.com/maypok86/otter v1.2.1
 )
@@ -121,7 +123,6 @@ require (
 	cloud.google.com/go/auth v0.7.2 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.3 // indirect
 	github.com/Crocmagnon/fatcontext v0.2.2 // indirect
-	github.com/Dynaclo/Onyx v0.3.0 // indirect
 	github.com/GoogleCloudPlatform/grpc-gcp-go/grpcgcp v1.5.0 // indirect
 	github.com/Masterminds/semver/v3 v3.2.1 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.0 // indirect
@@ -149,7 +150,6 @@ require (
 	github.com/golangci/modinfo v0.3.4 // indirect
 	github.com/google/flatbuffers v2.0.8+incompatible // indirect
 	github.com/gosimple/unidecode v1.0.1 // indirect
-	github.com/hmdsefi/gograph v0.4.2 // indirect
 	github.com/jjti/go-spancheck v0.6.1 // indirect
 	github.com/klauspost/cpuid/v2 v2.0.9 // indirect
 	github.com/lasiar/canonicalheader v1.1.1 // indirect
