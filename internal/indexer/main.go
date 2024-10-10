@@ -1,6 +1,7 @@
 package indexer
 
 import (
+	"fmt"
 	"github.com/Dynaclo/Onyx"
 	v1 "github.com/authzed/authzed-go/proto/authzed/api/v1"
 	corev1 "github.com/authzed/spicedb/pkg/proto/core/v1"
@@ -10,17 +11,19 @@ import (
 
 var Index SVK
 var graph *Onyx.Graph
+var IN_MEMORY_GLOBAL bool = true
 
 func AddEdge(tuple *corev1.RelationTuple) {
 	if graph == nil {
 		var err error
-		graph, err = Onyx.NewGraph("/tmp/tmpgraph", false)
+		graph, err = Onyx.NewGraph("/tmp/tmpgraph", false || IN_MEMORY_GLOBAL)
 		if err != nil {
 			panic(err)
 		}
 	}
 	src := makeNodeNameFromObjectRelationPair(tuple.ResourceAndRelation)
 	dest := makeNodeNameFromObjectRelationPair(tuple.Subject)
+	fmt.Printf("[Pre-Init] Added edge %s->%s\n", src, dest)
 	err := graph.AddEdge(src, dest, nil)
 	if err != nil {
 		panic(err)
@@ -31,7 +34,10 @@ func NewIndex() {
 	blueQueue := NewWriteQueue(100)
 	sv := SVK{numReads: -1, blueQueue: blueQueue, greenQueue: NewWriteQueue(100), CurQueueLock: sync.RWMutex{}, RPair: &RPair{}, lastUpdated: time.Now(), lastUpdatedMu: sync.Mutex{}}
 	sv.CurrentQueue = blueQueue
-	sv.NewIndex(graph)
+	err := sv.NewIndex(graph)
+	if err != nil {
+		panic(err)
+	}
 	Index = sv
 }
 

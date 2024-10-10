@@ -110,7 +110,7 @@ require (
 )
 
 require (
-	github.com/Dynaclo/Onyx v0.3.2
+	github.com/Dynaclo/Onyx v0.3.3
 	github.com/Yiling-J/theine-go v0.3.2
 	github.com/gosimple/slug v1.14.0
 	github.com/hmdsefi/gograph v0.4.2

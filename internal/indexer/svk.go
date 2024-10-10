@@ -100,7 +100,7 @@ func (algo *SVK) updateSvkOptionally() {
 // ok since it is a inti step tho ig
 func (algo *SVK) NewIndex(graph *Onyx.Graph) error {
 	if graph == nil {
-		graph, err := Onyx.NewGraph("./onyx-graph", false)
+		graph, err := Onyx.NewGraph("./onyx-graph", false || IN_MEMORY_GLOBAL)
 		if err != nil {
 			return err
 		}
@@ -125,7 +125,7 @@ func (algo *SVK) NewIndex(graph *Onyx.Graph) error {
 
 func (algo *SVK) reverseGraph() error {
 	var err error
-	algo.ReverseGraph, err = Onyx.NewGraph("./onyx-graph-rev", false)
+	algo.ReverseGraph, err = Onyx.NewGraph("./onyx-graph-rev", false || IN_MEMORY_GLOBAL)
 	if err != nil {
 		return err
 	}
@@ -235,6 +235,9 @@ func (algo *SVK) recomputeRPlus(pair *RPair, wg *sync.WaitGroup) error {
 		}
 	}
 
+	for k, v := range pair.R_Plus {
+		fmt.Println("[R+] ", k, ": ", v)
+	}
 	return nil
 }
 
@@ -265,6 +268,10 @@ func (algo *SVK) recomputeRMinus(pair *RPair, wg *sync.WaitGroup) error {
 		}
 	}
 
+	fmt.Println("========Printing R Minus=========")
+	for k, v := range pair.R_Minus {
+		fmt.Println("[R-] ", k, ": ", v)
+	}
 	return nil
 }
 
@@ -330,7 +337,7 @@ func directedBFS(graph *Onyx.Graph, src string, dst string) (bool, error) {
 
 		neighbors, err := graph.GetEdges(currentVertex, nil)
 		if err != nil {
-			return false, nil
+			return false, err
 		}
 		// Get all edges from the current vertex
 		for nextVertex, _ := range neighbors {
