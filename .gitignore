@@ -6,3 +6,4 @@ completions/
 coverage.txt
 .idea/
 onyx-*
+.DS_Store

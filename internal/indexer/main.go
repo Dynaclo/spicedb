@@ -5,19 +5,38 @@ import (
 	"github.com/acmpesuecc/Onyx"
 	v1 "github.com/authzed/authzed-go/proto/authzed/api/v1"
 	corev1 "github.com/authzed/spicedb/pkg/proto/core/v1"
+	"os"
 	"sync"
 	"time"
 )
 
 var Index SVK
 var graph *Onyx.Graph
-var IN_MEMORY_GLOBAL bool = true
+var IN_MEMORY_GLOBAL bool = false
 var DO_BFS bool = false
+var BADGER_GRAPH_PATH string = "./onyx-graph"
+var BADGER_REV_GRAPH_PATH string = "./onyx-graph-rev"
+
+func deleteBadgerGraphsIfExist() {
+	folders := []string{BADGER_GRAPH_PATH, BADGER_REV_GRAPH_PATH}
+
+	for _, folderPath := range folders {
+		if _, err := os.Stat(folderPath); !os.IsNotExist(err) {
+			if err := os.RemoveAll(folderPath); err != nil {
+				fmt.Println("Error deleting folder:", folderPath, err)
+			} else {
+				fmt.Println("Folder deleted successfully:", folderPath)
+			}
+		}
+	}
+}
 
 func AddEdge(tuple *corev1.RelationTuple) {
 	if graph == nil {
+		deleteBadgerGraphsIfExist()
+
 		var err error
-		graph, err = Onyx.NewGraph("/tmp/tmpgraph", false || IN_MEMORY_GLOBAL)
+		graph, err = Onyx.NewGraph(BADGER_GRAPH_PATH, false || IN_MEMORY_GLOBAL)
 		if err != nil {
 			panic(err)
 		}

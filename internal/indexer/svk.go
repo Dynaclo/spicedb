@@ -118,9 +118,10 @@ func (algo *SVK) NewIndex(graph *Onyx.Graph) error {
 		fmt.Println("SVK Prometheus metrics available at :9093/metrics")
 		http.ListenAndServe(":9093", nil)
 	}()
+	//-------------------
 
 	if graph == nil {
-		graph, err := Onyx.NewGraph("./onyx-graph", false || IN_MEMORY_GLOBAL)
+		graph, err := Onyx.NewGraph(BADGER_GRAPH_PATH, false || IN_MEMORY_GLOBAL)
 		if err != nil {
 			return err
 		}
@@ -145,7 +146,7 @@ func (algo *SVK) NewIndex(graph *Onyx.Graph) error {
 
 func (algo *SVK) reverseGraph() error {
 	var err error
-	algo.ReverseGraph, err = Onyx.NewGraph("./onyx-graph-rev", false || IN_MEMORY_GLOBAL)
+	algo.ReverseGraph, err = Onyx.NewGraph(BADGER_REV_GRAPH_PATH, false || IN_MEMORY_GLOBAL)
 	if err != nil {
 		return err
 	}
