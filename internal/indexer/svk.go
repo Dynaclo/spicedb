@@ -6,6 +6,9 @@ import (
 	"github.com/Dynaclo/Onyx"
 	log "github.com/authzed/spicedb/internal/logging"
 	"github.com/hmdsefi/gograph"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"net/http"
 	"os"
 	"sync"
 	"time"
@@ -38,6 +41,8 @@ type SVK struct {
 	CurrentQueue  *WriteQueue
 	lastUpdated   time.Time
 	lastUpdatedMu sync.Mutex
+	promCounter   *prometheus.CounterVec
+	promRegistry  *prometheus.Registry
 }
 
 type Operation struct {
@@ -99,6 +104,21 @@ func (algo *SVK) updateSvkOptionally() {
 // vertices are added instead of taking in graph as param which casues huge copy
 // ok since it is a inti step tho ig
 func (algo *SVK) NewIndex(graph *Onyx.Graph) error {
+	//prometheus setup
+	algo.promRegistry = prometheus.NewRegistry()
+	algo.promCounter = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "svk_check_count",
+			Help: "Number of insert operations per approach",
+		},
+		[]string{"approach"})
+	algo.promRegistry.MustRegister(algo.promCounter)
+	http.Handle("/metrics", promhttp.HandlerFor(algo.promRegistry, promhttp.HandlerOpts{}))
+	go func() {
+		fmt.Println("SVK Prometheus metrics available at :9093/metrics")
+		http.ListenAndServe(":9093", nil)
+	}()
+
 	if graph == nil {
 		graph, err := Onyx.NewGraph("./onyx-graph", false || IN_MEMORY_GLOBAL)
 		if err != nil {
@@ -189,7 +209,7 @@ func (algo *SVK) pickSv() error {
 			return err
 		}
 	}
-	fmt.Println(algo.SV, " chosen as SV")
+	fmt.Println("[Pre-Init] ", algo.SV, " chosen as SV")
 	return nil
 }
 
@@ -357,43 +377,49 @@ func (algo *SVK) checkReachability(src string, dst string) (bool, error) {
 	algo.updateSvkOptionally()
 	svLabel := algo.SV
 
-	//if src is support vertex
-	if svLabel == src {
-		fmt.Println("[CheckReachability][Resolved] Src vertex is SV")
-		return algo.RPair.R_Plus[dst], nil
-	}
-
 	if !algo.RPairMutex.TryRLock() {
 		return false, errors.New("[CheckReachability][Unresoled] failed to get RLock")
 	}
 	defer algo.RPairMutex.RUnlock()
 
+	//if src is support vertex
+	if svLabel == src {
+		algo.promCounter.WithLabelValues("SRC").Inc()
+		fmt.Println("[CheckReachability][Resolved] Src vertex is SV")
+		return algo.RPair.R_Plus[dst], nil
+	}
+
 	//if dest is support vertex
 	if svLabel == dst {
+		algo.promCounter.WithLabelValues("DST").Inc()
 		fmt.Println("[CheckReachability][Resolved] Dst vertex is SV")
 		return algo.RPair.R_Minus[dst], nil
 	}
 
 	//try to apply O1
 	if algo.RPair.R_Minus[src] == true && algo.RPair.R_Plus[dst] == true {
+		algo.promCounter.WithLabelValues("O1").Inc()
 		fmt.Println("[CheckReachability][Resolved] Using O1")
 		return true, nil
 	}
 
 	//try to apply O2
 	if algo.RPair.R_Plus[src] == true && algo.RPair.R_Plus[dst] == false {
+		algo.promCounter.WithLabelValues("O2").Inc()
 		fmt.Println("[CheckReachability][Resolved] Using O2")
 		return false, nil
 	}
 
 	//try to apply O3
 	if algo.RPair.R_Minus[src] == false && algo.RPair.R_Minus[dst] == true {
+		algo.promCounter.WithLabelValues("O3").Inc()
 		fmt.Println("[CheckReachability][Resolved] Using O3")
 		return false, nil
 	}
 
 	//if all else fails, fallback to BFS
 	fmt.Println("[CheckReachability][Resolved] Fallback to BFS")
+	algo.promCounter.WithLabelValues("BFS").Inc()
 	bfs, err := directedBFS(algo.Graph, src, dst)
 	if err != nil {
 		return false, err
