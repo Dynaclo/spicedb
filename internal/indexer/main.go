@@ -12,6 +12,7 @@ import (
 var Index SVK
 var graph *Onyx.Graph
 var IN_MEMORY_GLOBAL bool = true
+var DO_BFS bool = false
 
 func AddEdge(tuple *corev1.RelationTuple) {
 	if graph == nil {
@@ -47,18 +48,22 @@ func (algo *SVK) InsertEdge(tuple *corev1.RelationTuple) error {
 	return algo.insertEdge(src, dest)
 }
 
-func (algo *SVK) Check(req *v1.CheckPermissionRequest) (v1.CheckPermissionResponse_Permissionship, error) {
+func (algo *SVK) Check(req *v1.CheckPermissionRequest) (v1.CheckPermissionResponse_Permissionship, bool, error) {
 	src := req.Resource.ObjectType + ":" + req.Resource.ObjectId
 	dst := req.Subject.Object.ObjectType + ":" + req.Subject.Object.ObjectId
-	hasPermission, err := algo.checkReachability(src, dst)
+	hasPermission, resolved, err := algo.checkReachability(src, dst)
 	if err != nil {
-		return v1.CheckPermissionResponse_PERMISSIONSHIP_NO_PERMISSION, err
+		return v1.CheckPermissionResponse_PERMISSIONSHIP_NO_PERMISSION, false, err
+	}
+	if !resolved {
+		return v1.CheckPermissionResponse_PERMISSIONSHIP_NO_PERMISSION, false, nil
 	}
 
+	//if resolved
 	if hasPermission {
-		return v1.CheckPermissionResponse_PERMISSIONSHIP_HAS_PERMISSION, nil
+		return v1.CheckPermissionResponse_PERMISSIONSHIP_HAS_PERMISSION, true, nil
 	} else {
-		return v1.CheckPermissionResponse_PERMISSIONSHIP_NO_PERMISSION, nil
+		return v1.CheckPermissionResponse_PERMISSIONSHIP_NO_PERMISSION, true, nil
 	}
 }
 

@@ -373,12 +373,12 @@ func directedBFS(graph *Onyx.Graph, src string, dst string) (bool, error) {
 	return false, nil
 }
 
-func (algo *SVK) checkReachability(src string, dst string) (bool, error) {
+func (algo *SVK) checkReachability(src string, dst string) (isReachable bool, resolved bool, err error) {
 	algo.updateSvkOptionally()
 	svLabel := algo.SV
 
 	if !algo.RPairMutex.TryRLock() {
-		return false, errors.New("[CheckReachability][Unresoled] failed to get RLock")
+		return false, true, errors.New("[CheckReachability][Unresoled] failed to get RLock")
 	}
 	defer algo.RPairMutex.RUnlock()
 
@@ -386,50 +386,54 @@ func (algo *SVK) checkReachability(src string, dst string) (bool, error) {
 	if svLabel == src {
 		algo.promCounter.WithLabelValues("SRC").Inc()
 		fmt.Println("[CheckReachability][Resolved] Src vertex is SV")
-		return algo.RPair.R_Plus[dst], nil
+		return algo.RPair.R_Plus[dst], true, nil
 	}
 
 	//if dest is support vertex
 	if svLabel == dst {
 		algo.promCounter.WithLabelValues("DST").Inc()
 		fmt.Println("[CheckReachability][Resolved] Dst vertex is SV")
-		return algo.RPair.R_Minus[dst], nil
+		return algo.RPair.R_Minus[dst], true, nil
 	}
 
 	//try to apply O1
 	if algo.RPair.R_Minus[src] == true && algo.RPair.R_Plus[dst] == true {
 		algo.promCounter.WithLabelValues("O1").Inc()
 		fmt.Println("[CheckReachability][Resolved] Using O1")
-		return true, nil
+		return true, true, nil
 	}
 
 	//try to apply O2
 	if algo.RPair.R_Plus[src] == true && algo.RPair.R_Plus[dst] == false {
 		algo.promCounter.WithLabelValues("O2").Inc()
 		fmt.Println("[CheckReachability][Resolved] Using O2")
-		return false, nil
+		return false, true, nil
 	}
 
 	//try to apply O3
 	if algo.RPair.R_Minus[src] == false && algo.RPair.R_Minus[dst] == true {
 		algo.promCounter.WithLabelValues("O3").Inc()
 		fmt.Println("[CheckReachability][Resolved] Using O3")
-		return false, nil
+		return false, true, nil
 	}
 
 	//if all else fails, fallback to BFS
 	fmt.Println("[CheckReachability][Resolved] Fallback to BFS")
 	algo.promCounter.WithLabelValues("BFS").Inc()
+	if !DO_BFS {
+		return false, false, nil
+	}
+
 	bfs, err := directedBFS(algo.Graph, src, dst)
 	if err != nil {
-		return false, err
+		return false, true, err
 	}
 
 	if bfs == true {
-		return true, nil
+		return true, true, nil
 	}
 	algo.numReads++
-	return false, nil
+	return false, true, nil
 }
 
 func generateDotFile(graph gograph.Graph[string], filename string) error {
