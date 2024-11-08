@@ -110,7 +110,6 @@ require (
 )
 
 require (
-	github.com/Dynaclo/Onyx v0.3.3
 	github.com/Yiling-J/theine-go v0.3.2
 	github.com/gosimple/slug v1.14.0
 	github.com/hmdsefi/gograph v0.4.2
@@ -125,6 +124,7 @@ require (
 	github.com/Crocmagnon/fatcontext v0.2.2 // indirect
 	github.com/GoogleCloudPlatform/grpc-gcp-go/grpcgcp v1.5.0 // indirect
 	github.com/Masterminds/semver/v3 v3.2.1 // indirect
+	github.com/acmpesuecc/Onyx v0.3.5 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.0 // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.17.27 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.16.11 // indirect

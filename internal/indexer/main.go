@@ -2,7 +2,7 @@ package indexer
 
 import (
 	"fmt"
-	"github.com/Dynaclo/Onyx"
+	"github.com/acmpesuecc/Onyx"
 	v1 "github.com/authzed/authzed-go/proto/authzed/api/v1"
 	corev1 "github.com/authzed/spicedb/pkg/proto/core/v1"
 	"sync"

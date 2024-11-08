@@ -3,7 +3,7 @@ package indexer
 import (
 	"errors"
 	"fmt"
-	"github.com/Dynaclo/Onyx"
+	"github.com/acmpesuecc/Onyx"
 	log "github.com/authzed/spicedb/internal/logging"
 	"github.com/hmdsefi/gograph"
 	"github.com/prometheus/client_golang/prometheus"

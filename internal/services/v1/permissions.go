@@ -87,14 +87,15 @@ func (ps *permissionServer) CheckPermission(ctx context.Context, req *v1.CheckPe
 	}
 
 	indexPermissionship, err := indexer.Index.Check(req)
-	if err == nil {
-		return &v1.CheckPermissionResponse{
-			CheckedAt:         checkedAt,
-			Permissionship:    indexPermissionship,
-			PartialCaveatInfo: &v1.PartialCaveatInfo{},
-			DebugTrace:        &v1.DebugInformation{},
-		}, nil
+	if err != nil {
+		panic(err)
 	}
+	return &v1.CheckPermissionResponse{
+		CheckedAt:         checkedAt,
+		Permissionship:    indexPermissionship,
+		PartialCaveatInfo: &v1.PartialCaveatInfo{},
+		DebugTrace:        &v1.DebugInformation{},
+	}, nil
 
 	cr, metadata, err := computed.ComputeCheck(ctx, ps.dispatch,
 		computed.CheckParameters{
