@@ -297,6 +297,8 @@ func (algo *SVK) recomputeRMinus(pair *RPair, wg *sync.WaitGroup) error {
 }
 
 func (algo *SVK) insertEdge(src string, dst string) error {
+	algo.updateSvkOptionally()
+
 	err := algo.Graph.AddEdge(src, dst, nil)
 	if err != nil {
 		return err
