@@ -256,9 +256,9 @@ func (algo *SVK) recomputeRPlus(pair *RPair, wg *sync.WaitGroup) error {
 		}
 	}
 
-	for k, v := range pair.R_Plus {
-		fmt.Println("[R+] ", k, ": ", v)
-	}
+	//for k, v := range pair.R_Plus {
+	//	fmt.Println("[R+] ", k, ": ", v)
+	//}
 	return nil
 }
 
@@ -289,10 +289,10 @@ func (algo *SVK) recomputeRMinus(pair *RPair, wg *sync.WaitGroup) error {
 		}
 	}
 
-	fmt.Println("========Printing R Minus=========")
-	for k, v := range pair.R_Minus {
-		fmt.Println("[R-] ", k, ": ", v)
-	}
+	//fmt.Println("========Printing R Minus=========")
+	//for k, v := range pair.R_Minus {
+	//	fmt.Println("[R-] ", k, ": ", v)
+	//}
 	return nil
 }
 
