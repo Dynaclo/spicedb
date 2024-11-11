@@ -1,7 +1,6 @@
 package indexer
 
 import (
-	"errors"
 	"fmt"
 	"github.com/acmpesuecc/Onyx"
 	log "github.com/authzed/spicedb/internal/logging"
@@ -393,7 +392,9 @@ func (algo *SVK) checkReachability(src string, dst string) (isReachable bool, re
 	svLabel := algo.SV
 
 	if !algo.RPairMutex.TryRLock() {
-		return false, false, errors.New("[CheckReachability][Unresoled] failed to get RLock, Fallback to SpiceDb")
+		algo.promCounter.WithLabelValues("LOCK-FAIL-BYPASS").Inc()
+		//return false, false, errors.New("[CheckReachability][Unresoled] failed to get RLock, Fallback to SpiceDb")
+		return false, false, nil
 	}
 	defer algo.RPairMutex.RUnlock()
 
