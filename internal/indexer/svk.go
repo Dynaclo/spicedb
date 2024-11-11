@@ -339,6 +339,8 @@ func (algo *SVK) DeleteEdge(src string, dst string) error {
 
 // Directed BFS implementation
 func directedBFS(graph *Onyx.Graph, src string, dst string) (bool, error) {
+	txn := graph.DB.NewTransaction(false)
+	defer txn.Discard()
 
 	queue := []string{}
 
@@ -355,10 +357,15 @@ func directedBFS(graph *Onyx.Graph, src string, dst string) (bool, error) {
 
 		// If we reach the destination vertex return true
 		if currentVertex == dst {
+			err := txn.Commit()
+			if err != nil {
+				return false, err
+			}
+
 			return true, nil
 		}
 
-		neighbors, err := graph.GetEdges(currentVertex, nil)
+		neighbors, err := graph.GetEdges(currentVertex, txn)
 		if err != nil {
 			return false, err
 		}
@@ -372,6 +379,11 @@ func directedBFS(graph *Onyx.Graph, src string, dst string) (bool, error) {
 		}
 	}
 
+	err := txn.Commit()
+	if err != nil {
+		return false, err
+	}
+
 	// If we exhaust the queue without finding the destination, return false
 	return false, nil
 }
@@ -381,7 +393,7 @@ func (algo *SVK) checkReachability(src string, dst string) (isReachable bool, re
 	svLabel := algo.SV
 
 	if !algo.RPairMutex.TryRLock() {
-		return false, true, errors.New("[CheckReachability][Unresoled] failed to get RLock")
+		return false, false, errors.New("[CheckReachability][Unresoled] failed to get RLock, Fallback to SpiceDb")
 	}
 	defer algo.RPairMutex.RUnlock()
 

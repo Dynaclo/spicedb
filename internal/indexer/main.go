@@ -13,7 +13,7 @@ import (
 var Index SVK
 var graph *Onyx.Graph
 var IN_MEMORY_GLOBAL bool = false
-var DO_BFS bool = false
+var DO_BFS bool = true
 var BADGER_GRAPH_PATH string = "./onyx-graph"
 var BADGER_REV_GRAPH_PATH string = "./onyx-graph-rev"
 
