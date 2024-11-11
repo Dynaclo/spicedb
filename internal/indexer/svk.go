@@ -53,7 +53,7 @@ type Operation struct {
 }
 
 const opsThreshold = 50
-const timeThresholdMillis = 500 * time.Millisecond
+const timeThresholdMillis = 10 * time.Second //500 * time.Millisecond
 
 func (algo *SVK) applyWrites() {
 	if !algo.lastUpdatedMu.TryLock() {
