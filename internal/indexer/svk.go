@@ -214,7 +214,7 @@ func (algo *SVK) pickSv() error {
 }
 
 func (algo *SVK) recompute() {
-	copyOfRpair := *algo.RPair
+	copyOfRpair := RPair{R_Plus: make(map[string]bool), R_Minus: make(map[string]bool)}
 	wg := sync.WaitGroup{}
 	wg.Add(2)
 	go algo.recomputeRPlus(&copyOfRpair, &wg)
@@ -366,6 +366,7 @@ func directedBFS(graph *Onyx.Graph, src string, dst string) (bool, error) {
 
 		neighbors, err := graph.GetEdges(currentVertex, txn)
 		if err != nil {
+			log.Print(err.Error())
 			panic(err)
 			return false, err
 		}
