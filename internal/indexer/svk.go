@@ -28,20 +28,21 @@ type RPair struct {
 	R_Minus map[string]bool
 }
 type SVK struct {
-	Graph         *Onyx.Graph
-	ReverseGraph  *Onyx.Graph
-	SV            string
-	RPairMutex    sync.RWMutex
-	RPair         *RPair
-	numReads      int
-	blueQueue     *WriteQueue
-	greenQueue    *WriteQueue
-	CurQueueLock  sync.RWMutex
-	CurrentQueue  *WriteQueue
-	lastUpdated   time.Time
-	lastUpdatedMu sync.Mutex
-	promCounter   *prometheus.CounterVec
-	promRegistry  *prometheus.Registry
+	Graph            *Onyx.Graph
+	ReverseGraph     *Onyx.Graph
+	SV               string
+	RPairMutex       sync.RWMutex
+	RPair            *RPair
+	numReads         int
+	blueQueue        *WriteQueue
+	greenQueue       *WriteQueue
+	CurQueueLock     sync.RWMutex
+	CurrentQueue     *WriteQueue
+	lastUpdated      time.Time
+	lastUpdatedMu    sync.Mutex
+	svkCheckCounter  *prometheus.CounterVec
+	insertDurationMS prometheus.Summary
+	promRegistry     *prometheus.Registry
 }
 
 type Operation struct {
@@ -59,6 +60,8 @@ func (algo *SVK) applyWrites() {
 		return
 	}
 	defer algo.lastUpdatedMu.Unlock()
+	start_time := time.Now()
+
 	prevQueue := algo.CurrentQueue
 	algo.CurQueueLock.Lock()
 	if algo.CurrentQueue == algo.blueQueue {
@@ -82,6 +85,9 @@ func (algo *SVK) applyWrites() {
 	algo.pickSv()
 	algo.recompute()
 	algo.lastUpdated = time.Now()
+
+	time_taken := algo.lastUpdated.Sub(start_time).Nanoseconds()
+	algo.insertDurationMS.Observe(float64(time_taken))
 }
 
 func (algo *SVK) updateSvkOptionally() {
@@ -105,13 +111,14 @@ func (algo *SVK) updateSvkOptionally() {
 func (algo *SVK) NewIndex(graph *Onyx.Graph) error {
 	//prometheus setup
 	algo.promRegistry = prometheus.NewRegistry()
-	algo.promCounter = prometheus.NewCounterVec(
+	algo.svkCheckCounter = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "svk_check_count",
 			Help: "Number of insert operations per approach",
 		},
 		[]string{"approach"})
-	algo.promRegistry.MustRegister(algo.promCounter)
+	algo.insertDurationMS = prometheus.NewSummary(prometheus.SummaryOpts{Name: "insert_duration_ns", Help: "Time taken to insert the write queue"})
+	algo.promRegistry.MustRegister(algo.svkCheckCounter, algo.insertDurationMS)
 	http.Handle("/metrics", promhttp.HandlerFor(algo.promRegistry, promhttp.HandlerOpts{}))
 	go func() {
 		fmt.Println("SVK Prometheus metrics available at :9093/metrics")
@@ -394,7 +401,7 @@ func (algo *SVK) checkReachability(src string, dst string) (isReachable bool, re
 	svLabel := algo.SV
 
 	if !algo.RPairMutex.TryRLock() {
-		algo.promCounter.WithLabelValues("LOCK-FAIL-BYPASS").Inc()
+		algo.svkCheckCounter.WithLabelValues("LOCK-FAIL-BYPASS").Inc()
 		//return false, false, errors.New("[CheckReachability][Unresoled] failed to get RLock, Fallback to SpiceDb")
 		return false, false, nil
 	}
@@ -402,42 +409,42 @@ func (algo *SVK) checkReachability(src string, dst string) (isReachable bool, re
 
 	//if src is support vertex
 	if svLabel == src {
-		algo.promCounter.WithLabelValues("SRC").Inc()
+		algo.svkCheckCounter.WithLabelValues("SRC").Inc()
 		fmt.Println("[CheckReachability][Resolved] Src vertex is SV")
 		return algo.RPair.R_Plus[dst], true, nil
 	}
 
 	//if dest is support vertex
 	if svLabel == dst {
-		algo.promCounter.WithLabelValues("DST").Inc()
+		algo.svkCheckCounter.WithLabelValues("DST").Inc()
 		fmt.Println("[CheckReachability][Resolved] Dst vertex is SV")
 		return algo.RPair.R_Minus[dst], true, nil
 	}
 
 	//try to apply O1
 	if algo.RPair.R_Minus[src] == true && algo.RPair.R_Plus[dst] == true {
-		algo.promCounter.WithLabelValues("O1").Inc()
+		algo.svkCheckCounter.WithLabelValues("O1").Inc()
 		fmt.Println("[CheckReachability][Resolved] Using O1")
 		return true, true, nil
 	}
 
 	//try to apply O2
 	if algo.RPair.R_Plus[src] == true && algo.RPair.R_Plus[dst] == false {
-		algo.promCounter.WithLabelValues("O2").Inc()
+		algo.svkCheckCounter.WithLabelValues("O2").Inc()
 		fmt.Println("[CheckReachability][Resolved] Using O2")
 		return false, true, nil
 	}
 
 	//try to apply O3
 	if algo.RPair.R_Minus[src] == false && algo.RPair.R_Minus[dst] == true {
-		algo.promCounter.WithLabelValues("O3").Inc()
+		algo.svkCheckCounter.WithLabelValues("O3").Inc()
 		fmt.Println("[CheckReachability][Resolved] Using O3")
 		return false, true, nil
 	}
 
 	//if all else fails, fallback to BFS
 	fmt.Println("[CheckReachability][Resolved] Fallback to BFS")
-	algo.promCounter.WithLabelValues("BFS").Inc()
+	algo.svkCheckCounter.WithLabelValues("BFS").Inc()
 	if !DO_BFS {
 		return false, false, nil
 	}
