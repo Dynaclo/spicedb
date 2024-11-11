@@ -243,8 +243,8 @@ func (algo *SVK) recompute() {
 		wg.Add(2)
 		go algo.recomputeRPlus(copyOfRpair[sv], sv, &wg)
 		go algo.recomputeRMinus(copyOfRpair[sv], sv, &wg)
+		wg.Wait()
 	}
-	wg.Wait()
 
 	algo.RPairMutex.Lock()
 	defer algo.RPairMutex.Unlock()
