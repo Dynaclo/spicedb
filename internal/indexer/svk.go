@@ -7,6 +7,7 @@ import (
 	"github.com/hmdsefi/gograph"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"math/rand"
 	"net/http"
 	"os"
 	"sync"
@@ -192,35 +193,35 @@ func (algo *SVK) pickSv() error {
 	algo.SVs = []string{}
 
 	for _ = range NUM_SV {
-		vertex, err := algo.Graph.PickRandomVertex(nil)
-		if err != nil {
-			return err
-		}
+		vertex := fmt.Sprintf("node:%d", (rand.Intn(2500)))
+		//if err != nil {
+		//	return err
+		//}
 
 		//make sure this is not a isolated vertex and repick if it is
-		outDegree, err := algo.Graph.OutDegree(vertex, nil)
-		if err != nil {
-			return err
-		}
-		inDegree, err := algo.ReverseGraph.OutDegree(vertex, nil)
-		if err != nil {
-			return err
-		}
-		for outDegree == 0 && inDegree == 0 {
-			vertex, err = algo.Graph.PickRandomVertex(nil)
-			if err != nil {
-				return err
-			}
-
-			outDegree, err = algo.Graph.OutDegree(vertex, nil)
-			if err != nil {
-				return err
-			}
-			inDegree, err = algo.ReverseGraph.OutDegree(vertex, nil)
-			if err != nil {
-				return err
-			}
-		}
+		//outDegree, err := algo.Graph.OutDegree(vertex, nil)
+		//if err != nil {
+		//	return err
+		//}
+		//inDegree, err := algo.ReverseGraph.OutDegree(vertex, nil)
+		//if err != nil {
+		//	return err
+		//}
+		//for outDegree == 0 && inDegree == 0 {
+		//	vertex, err = algo.Graph.PickRandomVertex(nil)
+		//	if err != nil {
+		//		return err
+		//	}
+		//
+		//	outDegree, err = algo.Graph.OutDegree(vertex, nil)
+		//	if err != nil {
+		//		return err
+		//	}
+		//	inDegree, err = algo.ReverseGraph.OutDegree(vertex, nil)
+		//	if err != nil {
+		//		return err
+		//	}
+		//}
 
 		algo.SVs = append(algo.SVs, vertex)
 	}
