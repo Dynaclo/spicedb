@@ -441,7 +441,8 @@ func (algo *SVK) checkReachability(src string, dst string) (isReachable bool, re
 
 	bfs, err := directedBFS(algo.Graph, src, dst)
 	if err != nil {
-		return false, true, err
+		panic(err)
+		return false, false, err
 	}
 
 	if bfs == true {
