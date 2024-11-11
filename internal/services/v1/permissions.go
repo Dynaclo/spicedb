@@ -86,8 +86,11 @@ func (ps *permissionServer) CheckPermission(ctx context.Context, req *v1.CheckPe
 		debugOption = computed.BasicDebuggingEnabled
 	}
 
-	indexPermissionship, err := indexer.Index.Check(req)
-	if err == nil {
+	indexPermissionship, resolved, err := indexer.Index.Check(req)
+	if err != nil {
+		panic(err)
+	}
+	if resolved {
 		return &v1.CheckPermissionResponse{
 			CheckedAt:         checkedAt,
 			Permissionship:    indexPermissionship,
