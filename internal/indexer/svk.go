@@ -366,6 +366,7 @@ func directedBFS(graph *Onyx.Graph, src string, dst string) (bool, error) {
 
 		neighbors, err := graph.GetEdges(currentVertex, txn)
 		if err != nil {
+			panic(err)
 			return false, err
 		}
 		// Get all edges from the current vertex
@@ -442,7 +443,6 @@ func (algo *SVK) checkReachability(src string, dst string) (isReachable bool, re
 
 	bfs, err := directedBFS(algo.Graph, src, dst)
 	if err != nil {
-		panic(err)
 		return false, false, err
 	}
 
