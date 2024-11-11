@@ -30,9 +30,9 @@ type RPair struct {
 type SVK struct {
 	Graph            *Onyx.Graph
 	ReverseGraph     *Onyx.Graph
-	SV               string
 	RPairMutex       sync.RWMutex
-	RPair            *RPair
+	SVs              []string
+	SVV              map[string]*RPair
 	numReads         int
 	blueQueue        *WriteQueue
 	greenQueue       *WriteQueue
@@ -176,66 +176,85 @@ func (algo *SVK) reverseGraph() error {
 
 func (algo *SVK) initializeRplusAndRminusAtStartupTime() {
 	algo.RPairMutex.Lock()
-	//initialize R_Plus
-	algo.RPair.R_Plus = make(map[string]bool)
-	//initialize R_Minus
-	algo.RPair.R_Minus = make(map[string]bool)
+
+	for _, sv := range algo.SVs {
+		algo.SVV[sv] = &RPair{
+			R_Plus:  make(map[string]bool),
+			R_Minus: make(map[string]bool),
+		}
+	}
+
 	algo.RPairMutex.Unlock()
 	algo.recompute()
 }
 
 func (algo *SVK) pickSv() error {
-	vertex, err := algo.Graph.PickRandomVertex(nil)
-	if err != nil {
-		return err
-	}
-	algo.SV = vertex
+	algo.SVs = []string{}
 
-	//make sure this is not a isolated vertex and repick if it is
-	outDegree, err := algo.Graph.OutDegree(algo.SV, nil)
-	if err != nil {
-		return err
-	}
-	inDegree, err := algo.ReverseGraph.OutDegree(algo.SV, nil)
-	if err != nil {
-		return err
-	}
-	for outDegree == 0 && inDegree == 0 {
-		vertex, err = algo.Graph.PickRandomVertex(nil)
+	for _ = range NUM_SV {
+		vertex, err := algo.Graph.PickRandomVertex(nil)
 		if err != nil {
 			return err
 		}
-		algo.SV = vertex
 
-		outDegree, err = algo.Graph.OutDegree(algo.SV, nil)
+		//make sure this is not a isolated vertex and repick if it is
+		outDegree, err := algo.Graph.OutDegree(vertex, nil)
 		if err != nil {
 			return err
 		}
-		inDegree, err = algo.ReverseGraph.OutDegree(algo.SV, nil)
+		inDegree, err := algo.ReverseGraph.OutDegree(vertex, nil)
 		if err != nil {
 			return err
 		}
+		for outDegree == 0 && inDegree == 0 {
+			vertex, err = algo.Graph.PickRandomVertex(nil)
+			if err != nil {
+				return err
+			}
+
+			outDegree, err = algo.Graph.OutDegree(vertex, nil)
+			if err != nil {
+				return err
+			}
+			inDegree, err = algo.ReverseGraph.OutDegree(vertex, nil)
+			if err != nil {
+				return err
+			}
+		}
+
+		algo.SVs = append(algo.SVs, vertex)
 	}
-	fmt.Println("[Pre-Init] ", algo.SV, " chosen as SV")
+
+	fmt.Println("[Pre-Init] ", algo.SVs, " chosen as SV")
 	return nil
 }
 
 func (algo *SVK) recompute() {
-	copyOfRpair := RPair{R_Plus: make(map[string]bool), R_Minus: make(map[string]bool)}
+	copyOfRpair := make(map[string]*RPair)
+	for _, sv := range algo.SVs {
+		copyOfRpair[sv] = &RPair{
+			R_Plus:  make(map[string]bool),
+			R_Minus: make(map[string]bool),
+		}
+	}
+
 	wg := sync.WaitGroup{}
-	wg.Add(2)
-	go algo.recomputeRPlus(&copyOfRpair, &wg)
-	go algo.recomputeRMinus(&copyOfRpair, &wg)
+	for _, sv := range algo.SVs {
+		wg.Add(2)
+		go algo.recomputeRPlus(copyOfRpair[sv], sv, &wg)
+		go algo.recomputeRMinus(copyOfRpair[sv], sv, &wg)
+	}
 	wg.Wait()
+
 	algo.RPairMutex.Lock()
 	defer algo.RPairMutex.Unlock()
-	algo.RPair = &copyOfRpair
+	algo.SVV = copyOfRpair
 }
 
-func (algo *SVK) recomputeRPlus(pair *RPair, wg *sync.WaitGroup) error {
+func (algo *SVK) recomputeRPlus(pair *RPair, SV string, wg *sync.WaitGroup) error {
 	defer wg.Done()
 	// Initialize a queue for BFS
-	queue := []string{algo.SV}
+	queue := []string{SV}
 
 	// Reset R_Plus to mark all vertices as not reachable
 	for key := range pair.R_Plus {
@@ -268,9 +287,9 @@ func (algo *SVK) recomputeRPlus(pair *RPair, wg *sync.WaitGroup) error {
 	return nil
 }
 
-func (algo *SVK) recomputeRMinus(pair *RPair, wg *sync.WaitGroup) error {
+func (algo *SVK) recomputeRMinus(pair *RPair, SV string, wg *sync.WaitGroup) error {
 	defer wg.Done()
-	queue := []string{algo.SV}
+	queue := []string{SV}
 
 	for key := range pair.R_Minus {
 		delete(pair.R_Minus, key)
@@ -398,7 +417,6 @@ func directedBFS(graph *Onyx.Graph, src string, dst string) (bool, error) {
 
 func (algo *SVK) checkReachability(src string, dst string) (isReachable bool, resolved bool, err error) {
 	algo.updateSvkOptionally()
-	svLabel := algo.SV
 
 	if !algo.RPairMutex.TryRLock() {
 		algo.svkCheckCounter.WithLabelValues("LOCK-FAIL-BYPASS").Inc()
@@ -408,38 +426,41 @@ func (algo *SVK) checkReachability(src string, dst string) (isReachable bool, re
 	defer algo.RPairMutex.RUnlock()
 
 	//if src is support vertex
-	if svLabel == src {
+	if rpair, exists := algo.SVV[src]; exists {
 		algo.svkCheckCounter.WithLabelValues("SRC").Inc()
 		fmt.Println("[CheckReachability][Resolved] Src vertex is SV")
-		return algo.RPair.R_Plus[dst], true, nil
+		return rpair.R_Plus[dst], true, nil
 	}
 
 	//if dest is support vertex
-	if svLabel == dst {
+	if rpair, exists := algo.SVV[dst]; exists {
 		algo.svkCheckCounter.WithLabelValues("DST").Inc()
 		fmt.Println("[CheckReachability][Resolved] Dst vertex is SV")
-		return algo.RPair.R_Minus[dst], true, nil
+		return rpair.R_Minus[dst], true, nil
 	}
 
-	//try to apply O1
-	if algo.RPair.R_Minus[src] == true && algo.RPair.R_Plus[dst] == true {
-		algo.svkCheckCounter.WithLabelValues("O1").Inc()
-		fmt.Println("[CheckReachability][Resolved] Using O1")
-		return true, true, nil
-	}
+	//for every support vertex we have
+	for _, rpair := range algo.SVV {
+		//try to apply O1
+		if rpair.R_Minus[src] == true && rpair.R_Plus[dst] == true {
+			algo.svkCheckCounter.WithLabelValues("O1").Inc()
+			fmt.Println("[CheckReachability][Resolved] Using O1")
+			return true, true, nil
+		}
 
-	//try to apply O2
-	if algo.RPair.R_Plus[src] == true && algo.RPair.R_Plus[dst] == false {
-		algo.svkCheckCounter.WithLabelValues("O2").Inc()
-		fmt.Println("[CheckReachability][Resolved] Using O2")
-		return false, true, nil
-	}
+		//try to apply O2
+		if rpair.R_Plus[src] == true && rpair.R_Plus[dst] == false {
+			algo.svkCheckCounter.WithLabelValues("O2").Inc()
+			fmt.Println("[CheckReachability][Resolved] Using O2")
+			return false, true, nil
+		}
 
-	//try to apply O3
-	if algo.RPair.R_Minus[src] == false && algo.RPair.R_Minus[dst] == true {
-		algo.svkCheckCounter.WithLabelValues("O3").Inc()
-		fmt.Println("[CheckReachability][Resolved] Using O3")
-		return false, true, nil
+		//try to apply O3
+		if rpair.R_Minus[src] == false && rpair.R_Minus[dst] == true {
+			algo.svkCheckCounter.WithLabelValues("O3").Inc()
+			fmt.Println("[CheckReachability][Resolved] Using O3")
+			return false, true, nil
+		}
 	}
 
 	//if all else fails, fallback to BFS
