@@ -7,7 +7,6 @@ import (
 	"github.com/hmdsefi/gograph"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"math/rand"
 	"net/http"
 	"os"
 	"sync"
@@ -189,41 +188,10 @@ func (algo *SVK) initializeRplusAndRminusAtStartupTime() {
 	algo.recompute()
 }
 
-func (algo *SVK) pickSv() error {
-	algo.SVs = []string{}
-
-	for _ = range NUM_SV {
-		vertex := fmt.Sprintf("node:%d", (rand.Intn(2500)))
-		//if err != nil {
-		//	return err
-		//}
-
-		//make sure this is not a isolated vertex and repick if it is
-		//outDegree, err := algo.Graph.OutDegree(vertex, nil)
-		//if err != nil {
-		//	return err
-		//}
-		//inDegree, err := algo.ReverseGraph.OutDegree(vertex, nil)
-		//if err != nil {
-		//	return err
-		//}
-		//for outDegree == 0 && inDegree == 0 {
-		//	vertex, err = algo.Graph.PickRandomVertex(nil)
-		//	if err != nil {
-		//		return err
-		//	}
-		//
-		//	outDegree, err = algo.Graph.OutDegree(vertex, nil)
-		//	if err != nil {
-		//		return err
-		//	}
-		//	inDegree, err = algo.ReverseGraph.OutDegree(vertex, nil)
-		//	if err != nil {
-		//		return err
-		//	}
-		//}
-
-		algo.SVs = append(algo.SVs, vertex)
+func (algo *SVK) pickSv() (err error) {
+	algo.SVs, err = algo.Graph.PickRandomVertices(NUM_SV, nil)
+	if err != nil {
+		return err
 	}
 
 	fmt.Println("[Pre-Init] ", algo.SVs, " chosen as SV")
@@ -231,25 +199,25 @@ func (algo *SVK) pickSv() error {
 }
 
 func (algo *SVK) recompute() {
-	copyOfRpair := make(map[string]*RPair)
+	copyOfSVV := make(map[string]*RPair)
 	for _, sv := range algo.SVs {
-		copyOfRpair[sv] = &RPair{
+		copyOfSVV[sv] = &RPair{
 			R_Plus:  make(map[string]bool),
 			R_Minus: make(map[string]bool),
 		}
 	}
 
 	wg := sync.WaitGroup{}
-	for _, sv := range algo.SVs {
+	for sv, _ := range copyOfSVV {
 		wg.Add(2)
-		go algo.recomputeRPlus(copyOfRpair[sv], sv, &wg)
-		go algo.recomputeRMinus(copyOfRpair[sv], sv, &wg)
-		wg.Wait()
+		go algo.recomputeRPlus(copyOfSVV[sv], sv, &wg)
+		go algo.recomputeRMinus(copyOfSVV[sv], sv, &wg)
 	}
+	wg.Wait()
 
 	algo.RPairMutex.Lock()
 	defer algo.RPairMutex.Unlock()
-	algo.SVV = copyOfRpair
+	algo.SVV = copyOfSVV
 }
 
 func (algo *SVK) recomputeRPlus(pair *RPair, SV string, wg *sync.WaitGroup) error {
