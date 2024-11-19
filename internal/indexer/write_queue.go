@@ -9,7 +9,7 @@ type WriteQueue struct {
 	Size      uint
 	Available uint
 	Items     []*Operation
-	mutex     sync.Mutex
+	rw_mutex  sync.RWMutex
 	channel   chan *Operation
 }
 
@@ -20,7 +20,7 @@ func NewWriteQueue(size uint) *WriteQueue {
 		size,
 		size,
 		operations,
-		sync.Mutex{},
+		sync.RWMutex{},
 		channel,
 	}
 	go wq.SerialInserter()
@@ -28,8 +28,8 @@ func NewWriteQueue(size uint) *WriteQueue {
 }
 
 func (wq *WriteQueue) Add(op *Operation) {
-	wq.mutex.Lock()
-	defer wq.mutex.Unlock()
+	wq.rw_mutex.Lock()
+	defer wq.rw_mutex.Unlock()
 	wq.Items = append(wq.Items, op)
 	wq.Available--
 }
@@ -51,8 +51,8 @@ func (wq *WriteQueue) InsertToQueue(opType string, tuple *corev1.RelationTuple) 
 }
 
 func (wq *WriteQueue) DrainQueue() []*Operation {
-	wq.mutex.Lock()
-	defer wq.mutex.Unlock()
+	wq.rw_mutex.Lock()
+	defer wq.rw_mutex.Unlock()
 	ops := wq.Items
 	wq.Items = make([]*Operation, 0, wq.Size)
 	wq.Available = 0

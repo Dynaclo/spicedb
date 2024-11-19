@@ -53,7 +53,7 @@ func AddEdge(tuple *corev1.RelationTuple) {
 
 func NewIndex() {
 	blueQueue := NewWriteQueue(100)
-	sv := SVK{numReads: -1, blueQueue: blueQueue, greenQueue: NewWriteQueue(100), CurQueueLock: sync.RWMutex{}, SVV: make(map[string]*RPair), lastUpdated: time.Now(), lastUpdatedMu: sync.Mutex{}}
+	sv := SVK{numReads: -1, blueQueue: blueQueue, greenQueue: NewWriteQueue(100), CurQueueLock: sync.RWMutex{}, SVV: make(map[string]*RPair), lastUpdated: time.Now(), lastUpdatedRWMu: sync.RWMutex{}}
 	sv.CurrentQueue = blueQueue
 	err := sv.NewIndex(graph)
 	if err != nil {

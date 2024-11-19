@@ -39,7 +39,7 @@ type SVK struct {
 	CurQueueLock     sync.RWMutex
 	CurrentQueue     *WriteQueue
 	lastUpdated      time.Time
-	lastUpdatedMu    sync.Mutex
+	lastUpdatedRWMu  sync.RWMutex
 	svkCheckCounter  *prometheus.CounterVec
 	insertDurationMS prometheus.Summary
 	promRegistry     *prometheus.Registry
@@ -56,10 +56,10 @@ const opsThreshold = 50
 const timeThresholdMillis = 10 * time.Second //500 * time.Millisecond
 
 func (algo *SVK) applyWrites() {
-	if !algo.lastUpdatedMu.TryLock() {
+	if !algo.lastUpdatedRWMu.TryLock() {
 		return
 	}
-	defer algo.lastUpdatedMu.Unlock()
+	defer algo.lastUpdatedRWMu.Unlock()
 	start_time := time.Now()
 
 	prevQueue := algo.CurrentQueue
@@ -91,8 +91,12 @@ func (algo *SVK) applyWrites() {
 }
 
 func (algo *SVK) updateSvkOptionally() {
+	algo.CurrentQueue.rw_mutex.RLock()
+	defer algo.CurrentQueue.rw_mutex.RUnlock()
 	if algo.CurrentQueue.Available != algo.CurrentQueue.Size {
 		// we have writes in queue
+		algo.lastUpdatedRWMu.RLock()
+		defer algo.lastUpdatedRWMu.RUnlock()
 		if algo.lastUpdated.Add(timeThresholdMillis).Before(time.Now()) {
 			// we must apply writes
 			algo.applyWrites()
